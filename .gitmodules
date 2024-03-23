@@ -1,0 +1,3 @@
+[submodule "trocr"]
+	path = trocr
+	url = https://github.com/rsommerfeld/trocr.git
