@@ -1,2 +1,11 @@
 # load dataset
 lmdb
+
+# TrOCR
+torch
+torchvision
+torchaudio
+pillow
+transformers
+sentencepiece
+typer
