@@ -103,10 +103,17 @@ def main():
     
     df_output = pd.DataFrame(output, columns =['idx', 'output'])
     df_output['sep1'] = 0
+    print(list(df_output.columns.values))
+    df_output = df_output[['idx','sep1','output']]
+    df_output.to_csv('outputDF.csv')
     df_confid = pd.DataFrame(confidence, columns =['idx', 'confidence'])
     df_confid['sep2'] = 0
+    df_confid = df_confid[['idx','sep2','confidence']]
     df_combi = pd.merge(df_output, df_confid, on='idx', sort=True)
-    df_combi = df_combi['idx','sep1','output','sep2','confidence']
+    print(df_combi.head())
+    print(list(df_combi.columns.values))
+    print(['idx','sep1','output','sep2','confidence'])
+    df_combi = df_combi[['idx','sep1','output','sep2','confidence']]
     df_combi.to_csv("out.csv",sep=" ")
     
     
