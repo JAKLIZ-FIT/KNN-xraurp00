@@ -89,41 +89,44 @@ def compute_metrics(pred):
 def main():
     args = parse_args()
 
-    '''
-    output, confidence = predict_for_ds(
-        labels_path=Path(args.labels),
-        ds_path=Path(args.dataset),
-        use_local_model=args.use_local_model
-    )
+    run_model = True
+    if (run_model): # TODO make into a arg
 
-    # TODO - remove
-    print(output[:10])
-    print(confidence[:10])
+        output, confidence = predict_for_ds(
+            labels_path=Path(args.labels),
+            ds_path=Path(args.dataset),
+            use_local_model=args.use_local_model
+        )
     
-    for o, c in zip(output, confidence):
-        print(f'File: {o[0]}, prediction: {o[1]}, confidence: {c[1]}')
+        # TODO - remove
+        #print(output[:10])
+        #print(confidence[:10])
+        
+        #for o, c in zip(output, confidence):
+        #    print(f'File: {o[0]}, prediction: {o[1]}, confidence: {c[1]}')
+        
+        # put data to file
+        df_output = pd.DataFrame(output, columns =['idx', 'output'])
+        df_output['sep1'] = 0
+        #print(list(df_output.columns.values))
+        df_output = df_output[['idx','sep1','output']]
+        df_output.to_csv('outputDF.csv')
+        df_confid = pd.DataFrame(confidence, columns =['idx', 'confidence'])
+        df_confid['sep2'] = 0
+        df_confid = df_confid[['idx','sep2','confidence']]
+        df_combi = pd.merge(df_output, df_confid, on='idx', sort=True)
+        print(df_combi.head())
+        #print(list(df_combi.columns.values))
+        #print(['idx','sep1','output','sep2','confidence'])
+        df_combi = df_combi[['idx','sep1','output','sep2','confidence']]
+        df_combi = df_combi.sort_values(by=['idx'])
+        df_combi.to_csv("out.csv",sep=" ",header=False)
+        
     
-    df_output = pd.DataFrame(output, columns =['idx', 'output'])
-    df_output['sep1'] = 0
-    print(list(df_output.columns.values))
-    df_output = df_output[['idx','sep1','output']]
-    df_output.to_csv('outputDF.csv')
-    df_confid = pd.DataFrame(confidence, columns =['idx', 'confidence'])
-    df_confid['sep2'] = 0
-    df_confid = df_confid[['idx','sep2','confidence']]
-    df_combi = pd.merge(df_output, df_confid, on='idx', sort=True)
-    print(df_combi.head())
-    print(list(df_combi.columns.values))
-    print(['idx','sep1','output','sep2','confidence'])
-    df_combi = df_combi[['idx','sep1','output','sep2','confidence']]
-    df_combi = df_combi.sort_values(by=['idx'])
-    df_combi.to_csv("out.csv",sep=" ",header=False)
-    # put data to file
-    '''
+    else: # for debugging metrics
+        df_combi = pd.read_csv('out.csv', sep=" 0 ", header=None, engine='python')
+        df_combi.rename(columns={0: "idx", 1: "output", 2: "confidence"}, inplace=True)
     
-    # for debugging metrics
-    df_combi = pd.read_csv('out.csv', sep=" 0 ", header=None, engine='python')
-    df_combi.rename(columns={0: "idx", 1: "output", 2: "confidence"}, inplace=True)
     # TODO
     # calculate CER, WER
     #from datasets import load_metric
