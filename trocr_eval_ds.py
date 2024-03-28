@@ -140,7 +140,14 @@ def main():
     label_df = pd.read_csv(args.labels, sep=" 0 ", header=None, engine='python')
     label_df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
     
+    # print side by side for debugging format
+    '''
     print(pd.concat([df_combi,label_df],axis=1))
+    predsRefs = pd.concat([df_combi,label_df],axis=1)
+    predsRefs = predsRefs[['idx','file_name','text','output','confidence']]
+    for i in range(predsRefs.shape[0]):
+        print(predsRefs.iloc[i,2:])
+    '''
     
     references = label_df['text']
     predictions = df_combi['output']
