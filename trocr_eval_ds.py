@@ -120,11 +120,12 @@ def main():
         #print(['idx','sep1','output','sep2','confidence'])
         df_combi = df_combi[['idx','sep1','output','sep2','confidence']]
         df_combi = df_combi.sort_values(by=['idx'])
-        df_combi.to_csv("out.csv",sep=" ",header=False)
+        import csv
+        df_combi.to_csv("out.csv",sep=" ",header=False,quoting=csv.QUOTE_NONE,columns=['output','sep2','confidence'],index=False,escapechar="\\")
         
     
     else: # for debugging metrics
-        df_combi = pd.read_csv('out.csv', sep=" 0 ", header=None, engine='python')
+        df_combi = pd.read_csv('out.csv', sep=" 0 ", header=None, engine='python',quoting=csv.QUOTE_NONE,escapechar="\\")
         df_combi.rename(columns={0: "idx", 1: "output", 2: "confidence"}, inplace=True)
         
     
@@ -141,13 +142,15 @@ def main():
     label_df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
     
     # print side by side for debugging format
-    '''
+    
     print(pd.concat([df_combi,label_df],axis=1))
     predsRefs = pd.concat([df_combi,label_df],axis=1)
     predsRefs = predsRefs[['idx','file_name','text','output','confidence']]
     for i in range(predsRefs.shape[0]):
         print(predsRefs.iloc[i,2:])
-    '''
+        
+    predsRefs.to_csv('predsRefs.csv')
+    
     
     references = label_df['text']
     predictions = df_combi['output']
