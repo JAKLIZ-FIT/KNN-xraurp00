@@ -13,6 +13,7 @@ from context import Context
 
 import pandas as pd
 
+
 # TODO
 # load val/test ds
 # load image db
@@ -88,6 +89,7 @@ def compute_metrics(pred):
 def main():
     args = parse_args()
 
+    '''
     output, confidence = predict_for_ds(
         labels_path=Path(args.labels),
         ds_path=Path(args.dataset),
@@ -114,19 +116,39 @@ def main():
     print(list(df_combi.columns.values))
     print(['idx','sep1','output','sep2','confidence'])
     df_combi = df_combi[['idx','sep1','output','sep2','confidence']]
-    df_combi.to_csv("out.csv",sep=" ")
-    
-    
-    # TODO
-    from datasets import load_metric
-
-    cer_metric = load_metric("cer")
-    
-    
-    # calculate CER, WER
-    
-    
+    df_combi = df_combi.sort_values(by=['idx'])
+    df_combi.to_csv("out.csv",sep=" ",header=False)
     # put data to file
+    '''
+    
+    # for debugging metrics
+    df_combi = pd.read_csv('out.csv', sep=" 0 ", header=None, engine='python')
+    df_combi.rename(columns={0: "idx", 1: "output", 2: "confidence"}, inplace=True)
+    # TODO
+    # calculate CER, WER
+    #from datasets import load_metric
+
+    #cer_metric = load_metric("cer")
+    #print(cer_metric)
+    
+    # loading labels for evaluating metrics # TODO move to separate function?
+    label_df = pd.read_csv(args.labels, sep=" 0 ", header=None, engine='python')
+    label_df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
+    references = label_df['text']
+    predictions = df_combi['output']
+    
+    from evaluate import load
+    cer = load("cer")
+    cer_score = cer.compute(predictions=predictions,references=references)
+    print ("cer score = "+str(cer_score))
+    
+    wer = load('wer')
+    wer_score = wer.compute(predictions=predictions,references=references)
+    print('wer score = ' + str(wer_score))
+    
+    
+    
+    
 
     return 0
 
