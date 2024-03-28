@@ -126,6 +126,8 @@ def main():
     else: # for debugging metrics
         df_combi = pd.read_csv('out.csv', sep=" 0 ", header=None, engine='python')
         df_combi.rename(columns={0: "idx", 1: "output", 2: "confidence"}, inplace=True)
+        
+    
     
     # TODO
     # calculate CER, WER
@@ -137,6 +139,9 @@ def main():
     # loading labels for evaluating metrics # TODO move to separate function?
     label_df = pd.read_csv(args.labels, sep=" 0 ", header=None, engine='python')
     label_df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
+    
+    print(pd.concat([df_combi,label_df],axis=1))
+    
     references = label_df['text']
     predictions = df_combi['output']
     
