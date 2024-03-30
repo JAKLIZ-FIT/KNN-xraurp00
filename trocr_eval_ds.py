@@ -11,6 +11,9 @@ from trocr.src.scripts import predict
 from dataset import LMDBDataset
 from context import Context
 
+import pandas as pd
+
+
 # TODO
 # load val/test ds
 # load image db
@@ -30,7 +33,7 @@ def predict_for_ds(labels_path: Path, ds_path: Path, use_local_model: bool = Tru
         label_file=labels_path,
         processor=processor
     )
-    dataloader = DataLoader(ds, 20, shuffle=True, num_workers=8)
+    dataloader = DataLoader(ds, 1, shuffle=True, num_workers=8) # batchsize was originally 20
     model = load_model(use_local_model)
 
     """
@@ -70,22 +73,100 @@ def parse_args():
     )
     return parser.parse_args()
 
+def compute_metrics(pred):
+    labels_ids = pred.label_ids
+    pred_ids = pred.predictions
+
+    processor = load_processor()
+    pred_str = processor.batch_decode(pred_ids, skip_special_tokens=True)
+    labels_ids[labels_ids == -100] = processor.tokenizer.pad_token_id
+    label_str = processor.batch_decode(labels_ids, skip_special_tokens=True)
+
+    cer = cer_metric.compute(predictions=pred_str, references=label_str)
+
+    return {"cer": cer}
+
 def main():
     args = parse_args()
 
-    output, confidence = predict_for_ds(
-        labels_path=Path(args.labels),
-        ds_path=Path(args.dataset),
-        use_local_model=args.use_local_model
-    )
+    run_model = True
+    if (run_model): # TODO make into a arg
 
-    # TODO - remove
-    for o, c in zip(output, confidence):
-        print(f'File: {o[0]}, prediction: {o[1]}, confidence: {c[1]}')
-
+        output, confidence = predict_for_ds(
+            labels_path=Path(args.labels),
+            ds_path=Path(args.dataset),
+            use_local_model=args.use_local_model
+        )
+    
+        # TODO - remove
+        #print(output[:10])
+        #print(confidence[:10])
+        
+        #for o, c in zip(output, confidence):
+        #    print(f'File: {o[0]}, prediction: {o[1]}, confidence: {c[1]}')
+        
+        # put data to file
+        df_output = pd.DataFrame(output, columns =['idx', 'output'])
+        df_output['sep1'] = 0
+        #print(list(df_output.columns.values))
+        df_output = df_output[['idx','sep1','output']]
+        df_output.to_csv('outputDF.csv')
+        df_confid = pd.DataFrame(confidence, columns =['idx', 'confidence'])
+        df_confid['sep2'] = 0
+        df_confid = df_confid[['idx','sep2','confidence']]
+        df_combi = pd.merge(df_output, df_confid, on='idx', sort=True)
+        print(df_combi.head())
+        #print(list(df_combi.columns.values))
+        #print(['idx','sep1','output','sep2','confidence'])
+        df_combi = df_combi[['idx','sep1','output','sep2','confidence']]
+        df_combi = df_combi.sort_values(by=['idx'])
+        import csv
+        df_combi.to_csv("out.csv",sep=" ",header=False,quoting=csv.QUOTE_NONE,columns=['output','sep2','confidence'],index=False,escapechar="\\")
+        
+    
+    else: # for debugging metrics
+        df_combi = pd.read_csv('out.csv', sep=" 0 ", header=None, engine='python',quoting=csv.QUOTE_NONE,escapechar="\\")
+        df_combi.rename(columns={0: "idx", 1: "output", 2: "confidence"}, inplace=True)
+        
+    
+    
     # TODO
     # calculate CER, WER
-    # put data to file
+    #from datasets import load_metric
+
+    #cer_metric = load_metric("cer")
+    #print(cer_metric)
+    
+    # loading labels for evaluating metrics # TODO move to separate function?
+    label_df = pd.read_csv(args.labels, sep=" 0 ", header=None, engine='python')
+    label_df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
+    
+    # print side by side for debugging format
+    
+    print(pd.concat([df_combi,label_df],axis=1))
+    predsRefs = pd.concat([df_combi,label_df],axis=1)
+    predsRefs = predsRefs[['idx','file_name','text','output','confidence']]
+    for i in range(predsRefs.shape[0]):
+        print(predsRefs.iloc[i,2:])
+        
+    predsRefs.to_csv('predsRefs.csv')
+    
+    
+    references = label_df['text']
+    predictions = df_combi['output']
+    
+    from evaluate import load
+    cer = load("cer")
+    cer_score = cer.compute(predictions=predictions,references=references)
+    print ("cer score = "+str(cer_score))
+    
+    wer = load('wer')
+    wer_score = wer.compute(predictions=predictions,references=references)
+    print('wer score = ' + str(wer_score))
+    
+    
+    
+    
 
     return 0
 

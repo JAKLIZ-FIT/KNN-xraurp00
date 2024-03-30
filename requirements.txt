@@ -1,5 +1,8 @@
 # load dataset
 lmdb
+pandas
+evaluate
+jiwer
 
 # TrOCR
 torch
