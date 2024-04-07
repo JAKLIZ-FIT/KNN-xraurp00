@@ -5,7 +5,9 @@ import os
 import argparse
 import sys
 
-def extract_ds(source_path: str, target_path: str, n: int = 0) -> None:
+
+
+def extract_ds(source_path: str, target_path: str, n: int = 0, key="") -> None:
     """
     Extracts dataset from source path leading to lmdb file to target
     path leading to output folder.
@@ -16,13 +18,20 @@ def extract_ds(source_path: str, target_path: str, n: int = 0) -> None:
     env = lmdb.open(source_path)
     with env.begin() as transaction:
         cursor = transaction.cursor()
-        for i, (key, value) in enumerate(cursor.iternext(keys=True, values=True)):
-            if n != 0 and i >= n:
-                break
-            #print(key.decode('utf-8'))
-            output = os.path.join(target_path, key.decode('utf-8'))
+        if key == "":
+            for i, (key, value) in enumerate(cursor.iternext(keys=True, values=True)):
+                if n != 0 and i >= n:
+                    break
+                #print(key.decode('utf-8'))
+                output = os.path.join(target_path, key.decode('utf-8'))
+                with open(output, 'wb') as output_file:
+                    output_file.write(value)
+        else:
+            value = transaction.get(key.encode())
+            output = os.path.join(target_path, key)
             with open(output, 'wb') as output_file:
                 output_file.write(value)
+            
 
 def parse_args():
     parser = argparse.ArgumentParser('Extract lmdb to folder.')
@@ -42,6 +51,11 @@ def parse_args():
         type=int,
         default=0
     )
+    parser.add_argument(
+        '-k', '--key',
+        help='key (filename) to select a single image to be extracted',
+        default=""
+    )
     return parser.parse_args()
 
 def main():
@@ -50,7 +64,8 @@ def main():
     extract_ds(
         source_path=args.source,
         target_path=args.target,
-        n=args.number_of_records
+        n=args.number_of_records,
+        key=args.key
     )
 
     return 0
