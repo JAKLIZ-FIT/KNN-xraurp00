@@ -22,7 +22,8 @@ def load_context(
     train_ds_path: Path,
     label_file_path: Path,
     val_label_file_path: Path,
-    val_ds_path: Path = None
+    val_ds_path: Path = None,
+    batch_size: int = 20
 ) -> Context:
     """
     Loads model from local direcotry for training.
@@ -32,6 +33,7 @@ def load_context(
     :param val_label_file_path (pathlib.Path): path to label file for validation dataset
     :param val_ds_path (pathlib.Path): path to validation dataset to load
         (if set to None training dataset is used)
+    :param batch_size (int): batch size to use (defaults to 20)
     :return: tuple of lodeded (processor, model)
     """
     for p in (model_path, train_ds_path, label_file_path, val_label_file_path):
@@ -62,8 +64,8 @@ def load_context(
     )
 
     # create dataloaders
-    train_dl = DataLoader(train_ds, batch_size=20, shuffle=True, num_workers=0)
-    val_dl = DataLoader(val_ds, batch_size=20, num_workers=0)
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
+    val_dl = DataLoader(val_ds, batch_size=batch_size, num_workers=0)
 
     return Context(
         model=model,
@@ -308,6 +310,12 @@ def parse_args():
         required=True
     )
     parser.add_argument(
+        '-b', '--batch-size',
+        help='Batch size to use. (default = 20)',
+        type=int,
+        default=20
+    )
+    parser.add_argument(
         '-g', '--use-gpu',
         help='Use GPU (CUDA device) for training instead of CPU. '
             '(default = False)',
@@ -326,7 +334,8 @@ def main():
         train_ds_path=args.training_dataset,
         label_file_path=args.training_labels,
         val_label_file_path=args.validation_labels,
-        val_ds_path=args.validation_dataset
+        val_ds_path=args.validation_dataset,
+        batch_size=args.batch_size
     )
     # train the model
     train_model(context=context, num_epochs=args.epochs, device=device)
