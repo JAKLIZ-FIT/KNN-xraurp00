@@ -7,6 +7,7 @@ from transformers import (
     get_linear_schedule_with_warmup
 )
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from pathlib import Path
 from context import Context
@@ -92,7 +93,7 @@ def train_model(
     model = context.model
     optimizer = AdamW(
         params=model.parameters(),
-        lr=1e-6
+        lr=5e-6  # TODO - lookup some good values
     )
     num_training_steps = num_epochs * len(context.train_dataloader)
     num_warmup_steps = int(num_training_steps / 10)
@@ -128,12 +129,12 @@ def train_model(
             now = datetime.datetime.now()
             total_time = now - timestamp_start
             epoch_time = now - timestamp_last
-            th = int(int(total_time / 60) / 60)
-            tm = int(total_time / 60) % 60
-            ts = total_time % 60
-            eh = int(int(epoch_time / 60) / 60)
-            em = int(epoch_time / 60) % 60
-            es = epoch_time % 60
+            th = int(int(total_time.total_seconds() / 60) / 60)
+            tm = int(total_time.total_seconds() / 60) % 60
+            ts = int(total_time.total_seconds()) % 60
+            eh = int(int(epoch_time.total_seconds() / 60) / 60)
+            em = int(epoch_time.total_seconds() / 60) % 60
+            es = int(epoch_time.total_seconds()) % 60
             print(f"Epoch: {1 + epoch}")
             print(f"Accuracy: {accuracy}")
             print(f"Time: {now}")
@@ -165,7 +166,6 @@ def predict(
     with torch.no_grad():
         model.eval()
         for i, batch in enumerate(dataloader):
-            debug_print(f"Predicting batch {i+1}")
             inputs: torch.Tensor = batch["input"].to(device)
 
             generated_ids = model.generate(
@@ -331,7 +331,7 @@ def main():
     # train the model
     train_model(context=context, num_epochs=args.epochs, device=device)
     # save results
-    if not args.save_path.exist():
+    if not args.save_path.exists():
         os.makedirs(args.save_path)
     context.processor.save_pretrained(save_directory=args.save_path)
     context.model.save_pretrained(save_directory=args.save_path)

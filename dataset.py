@@ -54,4 +54,11 @@ class LMDBDataset(Dataset):
         ).input_ids[0]
 
         return {'idx': idx, 'input': image_tensor, 'label': label_tensor}
-        
+    
+    def get_label(self, idx) -> str:
+        assert 0 <= idx < len(self.labels.file_name), f"id {idx} outside of bounds [0, {len(self.labels.file_name)}]"
+        return self.labels.text[idx]
+
+    def get_path(self, idx) -> str:
+        assert 0 <= idx < len(self.labels.file_name), f"id {idx} outside of bounds [0, {len(self.labels.file_name)}]"
+        return self.labels.file_name[idx]
