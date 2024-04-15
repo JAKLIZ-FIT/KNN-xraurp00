@@ -20,7 +20,7 @@ export TMPDIR=$SCRATCHDIR
 # create env
 echo "Creating virtual environment."
 python3 -m venv $SCRATCHDIR/venv
-. $SCRATCHDIR/venv
+. $SCRATCHDIR/venv/bin/activate
 # install requirements
 echo "Installing dependencies."
 pip install -U pip
@@ -36,16 +36,16 @@ mkdir $SCRATCHDIR/src
 cp -r $PROJ_SRC $SCRATCHDIR/src
 # run training
 echo "Running the trocr_train.py script."
-cd $SCRATCHDIR/src
+cd $SCRATCHDIR/src/KNN-xraurp00
 python trocr_train.py \
     -m $MODELS/$SRC_MODEL \
-    -t $SCRATCH/ds/lines_40.lmdb \
-    -l $SCRATCH/ds/lines.trn \
-    -c $SCRATCH/ds/lines.val \
+    -t $SCRATCHDIR/ds/bentham_self-supervised/lines_40.lmdb \
+    -l $SCRATCHDIR/ds/bentham_self-supervised/lines.trn \
+    -c $SCRATCHDIR/ds/bentham_self-supervised/lines.val \
     -e 3 \
     -b 5 \
     -s $MODELS/$OUT_MODEL
-# TODO - add arg for gpu
+# TODO - add arg for gpu, change num. epochs, batch size
 # clean scratch
 echo "Cleaning up."
 cd ~
