@@ -42,8 +42,8 @@ python trocr_train.py \
     -t $SCRATCHDIR/ds/bentham_self-supervised/lines_40.lmdb \
     -l $SCRATCHDIR/ds/bentham_self-supervised/lines.trn \
     -c $SCRATCHDIR/ds/bentham_self-supervised/lines.val \
-    -e 3 \
-    -b 5 \
+    -e 10 \
+    -b 20 \
     -s $MODELS/$OUT_MODEL
 # TODO - add arg for gpu, change num. epochs, batch size
 # clean scratch
