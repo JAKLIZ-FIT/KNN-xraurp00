@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# PBS -N OCR_Train
-# PBS -q gpu
-# PBS -l select=1:ncpus=4:mem=22gb:scratch_local=50gb
-# PBS -l ngpus=1:gpu_cap=cuda60:cuda_version=11.0:gpu_mem=10gb
-# PBS -l walltime=2:00:00
-# PBS -m ae
+#PBS -N OCR_Train
+#PBS -q gpu
+#PBS -l select=1:ncpus=4:mem=22gb:scratch_local=50gb
+#PBS -l ngpus=1:gpu_cap=cuda60:cuda_version=11.0:gpu_mem=10gb
+#PBS -l walltime=2:00:00
+#PBS -m ae
 # TODO - change walltime to match full dataset training length
 export USERNAME='xraurp00'
 export PROJ_SRC="/storage/brno2/home/$USERNAME/knn/KNN-xraurp00"
