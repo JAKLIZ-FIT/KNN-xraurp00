@@ -128,7 +128,7 @@ def train_model(
             del loss, outputs
         
         if len(context.val_dataloader) > 0:
-            accuracy = validate(context=context, device=device)
+            c_accuracy w_accuracy = validate(context=context, device=device)
             now = datetime.datetime.now()
             total_time = now - timestamp_start
             epoch_time = now - timestamp_last
@@ -139,7 +139,7 @@ def train_model(
             em = int(epoch_time.total_seconds() / 60) % 60
             es = int(epoch_time.total_seconds()) % 60
             print(f"Epoch: {1 + epoch}")
-            print(f"Accuracy: {accuracy}")
+            print(f"Accuracy: CAR={c_accuracy}, WAR={w_accuracy}")
             print(f"Time: {now}")
             print(f"Total time elapsed: {th}:{tm}:{ts}")
             print(f"Time per epoch: {eh}:{em}:{es}")
@@ -245,10 +245,12 @@ def validate(
         dataloader=context.val_dataloader,
         device=device
     )
+    
     assert len(predictions) > 0
 
     correct_count = 0
     wrong_count = 0
+    
     for id, prediction in predictions:
         label = context.val_dataset.get_label(id)
         path = context.val_dataset.get_path(id)
@@ -263,7 +265,22 @@ def validate(
 
     if print_wrong:
         print(f"\nCorrect: {correct_count}\nWrong: {wrong_count}")
-    return correct_count / (len(predictions))
+    
+    #return correct_count / (len(predictions))
+    
+    references = [context.val_dataset.get_label(id) for id, prediction in predictions]    
+    predictionsList = [prediction for id, prediction in predictions]
+    
+    from evaluate import load
+    cer = load("cer")
+    cer_score = cer.compute(predictions=predictions,references=references)
+    car_score = 1 - cer_score
+    
+    wer = load('wer')
+    wer_score = wer.compute(predictions=predictions,references=references)
+    war_score = 1 - wer_score
+    
+    return car_score,war_score
 
 def parse_args():
     parser = argparse.ArgumentParser('Train TrOCR model.')
