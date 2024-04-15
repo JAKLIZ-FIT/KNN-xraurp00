@@ -93,6 +93,7 @@ def train_model(
     :param device: device to use for training
     """
     model = context.model
+    # TODO - use adam from pytorch
     optimizer = AdamW(
         params=model.parameters(),
         lr=5e-6  # TODO - lookup some good values
