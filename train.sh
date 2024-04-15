@@ -40,6 +40,7 @@ python trocr_train.py \
     -e 3 \
     -b 5 \
     -s $MODELS/$OUT_MODEL
+# TODO - add arg for gpu
 # clean scratch
 cd ~
 deactivate
