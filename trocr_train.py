@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 from context import Context
 from dataset import LMDBDataset
+from evaluate import load
 import argparse
 import os
 import sys
@@ -271,7 +272,6 @@ def validate(
     references = [context.val_dataset.get_label(id) for id, prediction in predictions]    
     predictionsList = [prediction for id, prediction in predictions]
     
-    from evaluate import load
     cer = load("cer")
     cer_score = cer.compute(predictions=predictions,references=references)
     car_score = 1 - cer_score
