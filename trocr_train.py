@@ -144,6 +144,8 @@ def train_model(
             print(f"Total time elapsed: {th}:{tm}:{ts}")
             print(f"Time per epoch: {eh}:{em}:{es}")
             timestamp_last = now
+            # TODO - add save checkpoint
+            # TODO - add early stopping
 
 def predict(
     processor: TrOCRProcessor,
