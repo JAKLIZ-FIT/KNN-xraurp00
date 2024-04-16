@@ -12,3 +12,6 @@ pillow
 transformers
 sentencepiece
 typer
+
+# TrOCR - small stage1 model dependencies
+protobuf
