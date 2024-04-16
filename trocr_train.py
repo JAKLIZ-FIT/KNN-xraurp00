@@ -129,7 +129,7 @@ def train_model(
             del loss, outputs
         
         if len(context.val_dataloader) > 0:
-            c_accuracy w_accuracy = validate(context=context, device=device)
+            c_accuracy, w_accuracy = validate(context=context, device=device)
             now = datetime.datetime.now()
             total_time = now - timestamp_start
             epoch_time = now - timestamp_last
@@ -208,6 +208,7 @@ def get_confidence_scores(generated_ids) -> list[float]:
     # Get raw logits, with shape (examples,tokens,token_vals)
     logits = generated_ids.scores
     logits = torch.stack(list(logits),dim=1)
+    print(logits)
 
     # Transform logits to softmax and keep only the highest
     # (chosen) p for each token
@@ -248,26 +249,6 @@ def validate(
     )
     
     assert len(predictions) > 0
-
-    correct_count = 0
-    wrong_count = 0
-    
-    for id, prediction in predictions:
-        label = context.val_dataset.get_label(id)
-        path = context.val_dataset.get_path(id)
-
-        # TODO - Use CER, WER, not whole label?
-        if prediction == label:
-            correct_count += 1
-        else:
-            wrong_count += 1
-            if print_wrong:
-                print(f"Predicted: \t{prediction}\nLabel: \t\t{label}\nPath: \t\t{path}")
-
-    if print_wrong:
-        print(f"\nCorrect: {correct_count}\nWrong: {wrong_count}")
-    
-    #return correct_count / (len(predictions))
     
     references = [context.val_dataset.get_label(id) for id, prediction in predictions]    
     predictionsList = [prediction for id, prediction in predictions]
