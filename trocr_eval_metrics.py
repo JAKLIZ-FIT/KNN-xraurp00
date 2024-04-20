@@ -117,7 +117,8 @@ def predict(
                 generated_ids=generated_ids
             )
             confidence_scores.extend(zip(ids, batch_confidence_scores))
-
+            print(generated_text)
+            exit(0)
     return output, confidence_scores
 
 def validate(
@@ -202,22 +203,51 @@ a
     """
     # Get raw logits, with shape (examples,tokens,token_vals)
     logits = generated_ids.scores
-    print(logits)
-    exit(0)
+    #print(logits)
     logits = torch.stack(list(logits),dim=1)
+    #print(logits)
 
     # Transform logits to softmax and keep only the highest
     # (chosen) p for each token
     logit_probs = F.softmax(logits, dim=2)
     char_probs = logit_probs.max(dim=2)[0]
-
+    print(char_probs)
+    char_probs_for_mean = torch.clone(char_probs)
+    
     # Only tokens of val>2 should influence the confidence.
     # Thus, set probabilities to 1 for tokens 0-2
-    mask = generated_ids.sequences[:,:-1] > 2
-    char_probs[mask] = 1
+    #mask = generated_ids.sequences[:,:-1] > 2 # original implementation
+    mask = generated_ids.sequences[:,:-1] <= 2 # TODO is this correct ???
+    print(mask)
+    mask4 = generated_ids.sequences[:,:-1] < 2
+    print(mask4)
+    mask2 = torch.clone(mask)
+    mask3 = generated_ids.sequences[:,:-1] > 2
+    valid_char_count = mask3.cumsum(dim=1)[:, -1]
+    print(valid_char_count)
 
+    char_probs[mask] = 1
+    print("\nCharProbsMasked:\n")
+    print(char_probs)
+    char_probs_for_mean[mask] = 0
+    
     # Confidence of each example is cumulative product of token probs
     batch_confidence_scores = char_probs.cumprod(dim=1)[:, -1]
+    batch_confidence_scores2 = char_probs_for_mean.cumsum(dim=1)[:, -1]
+    batch_confidence_scores3 = torch.max(char_probs_for_mean,dim=1)
+    batch_confidence_scores4 = torch.min(char_probs_for_mean,dim=1)
+    print("cumprod")
+    print(batch_confidence_scores)
+    print("cumsum")
+    print(batch_confidence_scores2)
+    batch_confidence_scores2 = torch.div(batch_confidence_scores2,valid_char_count)
+    print("mean")
+    print(batch_confidence_scores2)
+    print("max:")
+    print(batch_confidence_scores3)
+    print("min:")
+    print(batch_confidence_scores4)
+    # TODO change return
     return [v.item() for v in batch_confidence_scores], 
 
 
