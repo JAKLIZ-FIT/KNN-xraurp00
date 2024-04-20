@@ -116,9 +116,11 @@ def predict(
             batch_confidence_scores = get_confidence_scores(
                 generated_ids=generated_ids
             )
-            confidence_scores.extend(zip(ids, batch_confidence_scores))
-            print(generated_text)
-            exit(0)
+            #confidence_scores.extend(zip(ids, batch_confidence_scores))
+            confidence_scores.extend(zip(ids, batch_confidence_scores[0], batch_confidence_scores[1], batch_confidence_scores[2], batch_confidence_scores[3]))
+            #print(generated_text)
+            #print(confidence_scores)
+            #exit(0)
     return output, confidence_scores
 
 def validate(
@@ -175,6 +177,11 @@ def validate(
     )
     
     assert len(predictions) > 0
+
+    # TODO save CER and Confidence together for selection of data to add to trainDS
+    # TODO calculate CER per label
+    # TODO plot results
+    # TODO integrate (area under curve) to get the best confidence metric
     
     references = [context.val_dataset.get_label(id) for id, prediction in predictions]    
     predictionsList = [prediction for id, prediction in predictions]
@@ -211,44 +218,38 @@ a
     # (chosen) p for each token
     logit_probs = F.softmax(logits, dim=2)
     char_probs = logit_probs.max(dim=2)[0]
-    print(char_probs)
     char_probs_for_mean = torch.clone(char_probs)
     
     # Only tokens of val>2 should influence the confidence.
     # Thus, set probabilities to 1 for tokens 0-2
     #mask = generated_ids.sequences[:,:-1] > 2 # original implementation
     mask = generated_ids.sequences[:,:-1] <= 2 # TODO is this correct ???
-    print(mask)
-    mask4 = generated_ids.sequences[:,:-1] < 2
-    print(mask4)
-    mask2 = torch.clone(mask)
-    mask3 = generated_ids.sequences[:,:-1] > 2
-    valid_char_count = mask3.cumsum(dim=1)[:, -1]
-    print(valid_char_count)
-
+    mask_inverted = generated_ids.sequences[:,:-1] > 2
+    valid_char_count = mask_inverted.cumsum(dim=1)[:, -1]
     char_probs[mask] = 1
-    print("\nCharProbsMasked:\n")
-    print(char_probs)
     char_probs_for_mean[mask] = 0
     
     # Confidence of each example is cumulative product of token probs
-    batch_confidence_scores = char_probs.cumprod(dim=1)[:, -1]
-    batch_confidence_scores2 = char_probs_for_mean.cumsum(dim=1)[:, -1]
-    batch_confidence_scores3 = torch.max(char_probs_for_mean,dim=1)
-    batch_confidence_scores4 = torch.min(char_probs_for_mean,dim=1)
-    print("cumprod")
-    print(batch_confidence_scores)
-    print("cumsum")
-    print(batch_confidence_scores2)
-    batch_confidence_scores2 = torch.div(batch_confidence_scores2,valid_char_count)
-    print("mean")
-    print(batch_confidence_scores2)
-    print("max:")
-    print(batch_confidence_scores3)
-    print("min:")
-    print(batch_confidence_scores4)
+    batch_confidence_scores_prod = char_probs.cumprod(dim=1)[:, -1]
+    batch_confidence_scores_mean = char_probs_for_mean.cumsum(dim=1)[:, -1]
+    batch_confidence_scores_max = torch.max(char_probs_for_mean,dim=1)[0]
+    batch_confidence_scores_min = torch.min(char_probs_for_mean,dim=1)[0]
+    #print("cumprod")
+    #print(batch_confidence_scores_prod)
+    #print("cumsum")
+    #print(batch_confidence_scores_mean)
+    #batch_confidence_scores_mean = torch.div(batch_confidence_scores_mean,valid_char_count)
+    #print("mean")
+    #print(batch_confidence_scores_mean)
+    #print("max:")
+    #print(batch_confidence_scores_max)
+    #print("min:")
+    #print(batch_confidence_scores_min)
     # TODO change return
-    return [v.item() for v in batch_confidence_scores], 
+    return [v.item() for v in batch_confidence_scores_prod], \
+           [v.item() for v in batch_confidence_scores_mean],\
+           [v.item() for v in batch_confidence_scores_max],\
+           [v.item() for v in batch_confidence_scores_min]
 
 
 def parse_args():
@@ -307,6 +308,7 @@ def main():
         batch_size=args.batch_size
     )
 
+    # TODO add confusion network
     # TODO add logits and save logits
     accuracy = validate(context=context, device=device)
     # save results
