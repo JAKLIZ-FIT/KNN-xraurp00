@@ -90,6 +90,35 @@ class LMDBDataset(Dataset):
         else:
             images = [self.get_image(key=Key) for Key in keys]
         return images
+    
+    """
+    Inserts an augmented image into a database
+    warning: call on the correct LMDBDataset instance!!!
+    also adds the label+filename to the dataframe
+    """
+    def save_image(self, idx=None, image=None, key=None, label=None):
+        with self.image_database.begin(write=True) as txn:
+            txn.put(key.encode(), image.to_bytes())
+        if idx != None:
+            label = self.get_label(idx)
+        if label != None:
+            new_df = {'file_name' : key, 'text' : label}
+            self.labels = self.labels.append(new_df, ignore_index=True)
+            
+    """
+    Inserts list of augmented images into a database
+    warning: call on the correct LMDBDataset instance!!!
+    also saves new and old labels to a file
+    
+    TODO solve existing images in LMDB (maybe call this method on a copy)
+    """    
+    def save_images(self, idx=[], images=[], keys=[], labels=[]):
+        pass
+        # TODO
+        # open csv label file
+        # in cycle save image
+        #write labels to label file
+        #close file
             
     
     def get_label(self, idx) -> str:
