@@ -18,6 +18,13 @@ import os
 import sys
 import datetime
 
+from collections import deque
+import shutil
+
+# TODO check if necessary
+import csv
+import pandas as pd
+
 def load_context(
     model_path: Path,
     train_ds_path: Path,
@@ -77,10 +84,23 @@ def load_context(
         val_dataloader=val_dl
     )
 
+def early_stop_check(last_CAR_scores : deque):
+    scores = list(last_CAR_scores) 
+    #for score in last_CAR_scores:
+    # TODO should I expect the possibility of model getting worse?
+    return (scores[-1] - scores[0]) < 0.001 # TODO select a good value
+
+def save_last_scores(last_CAR_scores : deque, save_path : Path):
+    with open(save_path+"/scores.txt","w") as f:
+            f.write('\n'.join('{} {} {}'.format(x[0],x[1],x[2]) for x in last_CAR_scores)) 
+            #https://stackoverflow.com/questions/3820312/python-write-a-list-of-tuples-to-a-file
+    
+
 def train_model(
     context: Context,
     num_epochs: int,
-    device: torch.device
+    device: torch.device,
+    save_path: Path = ""
 ):
     """
     Train the provided model.
@@ -106,6 +126,13 @@ def train_model(
         num_warmup_steps=num_warmup_steps,
         num_training_steps=num_training_steps
     )
+
+    last_scores_cnt = 20 # TODO add as an argument
+    last_CAR_scores = deque(maxlen=last_scores_cnt)
+    do_delete_checkpoint = False
+    oldest_score = None
+    oldest_checkpoint_path = checkpoint_path+"_fail"
+    # just some value to generate error if dir does not exist 
 
     model.to(device)
     model.train()
@@ -145,8 +172,32 @@ def train_model(
             print(f"Total time elapsed: {th}:{tm}:{ts}")
             print(f"Time per epoch: {eh}:{em}:{es}")
             timestamp_last = now
-            # TODO - add save checkpoint
-            # TODO - add early stopping
+
+            checkpoint_name = "checkpoint"+str(1+epoch)
+            checkpoint_path = save_path + "_" + checkpoint_name
+            
+            if len(last_CAR_scores == last_scores_cnt): # enough last checkpoints stored
+                oldest_score = last_CAR_scores[0]
+                oldest_checkpoint_path = save_path+"_"+oldest_score[2]
+
+            last_CAR_scores.append((1+epoch,c_accuracy,checkpoint_name))
+            
+            if not checkpoint_path.exists(): # save checkpoint
+                os.makedirs(checkpoint_path)
+            context.processor.save_pretrained(save_directory=checkpoint_path)
+            context.model.save_pretrained(save_directory=checkpoint_path)
+
+            # delete oldest checkpoint
+            if oldest_checkpoint_path.exists()
+                shutil.rmtree(oldest_checkpoint_path)
+
+            if early_stop_check: # early stopping
+                save_last_scores(last_CAR_scores,save_path)
+                return
+    
+    # TODO delete checkpoints?
+    save_last_scores(last_CAR_scores,save_path)
+        
 
 def predict(
     processor: TrOCRProcessor,
@@ -323,6 +374,12 @@ def parse_args():
         default=False,
         action='store_true'
     )
+    parser.add_argument(
+        '-p', '--num-checkpoints',
+        help='Number of checkpoints to store. (default = 20)',
+        default=20,
+        type=int
+    )# TODO pass to train
     return parser.parse_args()
 
 def main():
@@ -339,12 +396,13 @@ def main():
         batch_size=args.batch_size
     )
     # train the model
-    train_model(context=context, num_epochs=args.epochs, device=device)
-    # save results
-    if not args.save_path.exists():
-        os.makedirs(args.save_path)
-    context.processor.save_pretrained(save_directory=args.save_path)
-    context.model.save_pretrained(save_directory=args.save_path)
+    train_model(context=context, num_epochs=args.epochs, device=device, save_path=args.save_path)
+    
+    # save results # will be saved as the last checkpoint 
+    #if not args.save_path.exists():
+    #    os.makedirs(args.save_path)
+    #context.processor.save_pretrained(save_directory=args.save_path)
+    #context.model.save_pretrained(save_directory=args.save_path)
 
     return 0
 
