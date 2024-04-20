@@ -138,6 +138,7 @@ def validate(
     :returns: list of confidence scores
     """
 
+    """
     predictions, confidence_scores = predict(
         processor=context.processor,
         model=context.model,
@@ -164,6 +165,28 @@ def validate(
     if print_wrong:
         print(f"\nCorrect: {correct_count}\nWrong: {wrong_count}")
     return correct_count / (len(predictions))
+    """
+    predictions, _ = predict(
+        processor=context.processor,
+        model=context.model,
+        dataloader=context.val_dataloader,
+        device=device
+    )
+    
+    assert len(predictions) > 0
+    
+    references = [context.val_dataset.get_label(id) for id, prediction in predictions]    
+    predictionsList = [prediction for id, prediction in predictions]
+    
+    cer = load("cer")
+    cer_score = cer.compute(predictions=predictions,references=references)
+    car_score = 1 - cer_score
+    
+    wer = load('wer')
+    wer_score = wer.compute(predictions=predictions,references=references)
+    war_score = 1 - wer_score
+    
+    return car_score,war_score
 
 def get_confidence_scores(generated_ids) -> list[float]:
     """
