@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# LMDB dataset definigion
+# LMDB dataset definition
 
 import lmdb
 from pathlib import Path
@@ -22,7 +22,7 @@ def load_labels(path: Path) -> dict[str, str]:
     return labels
 
 class LMDBDataset(Dataset):
-    def __init__(self, lmdb_database: Path, label_file: Path, processor: TrOCRProcessor, word_len_padding = 8):
+    def __init__(self, lmdb_database: Path, label_file: Path, processor: TrOCRProcessor = None, word_len_padding = 8):
         if not lmdb_database.exists():
             raise OSError(f'File {lmdb_database} does not exist!')
 
@@ -35,16 +35,6 @@ class LMDBDataset(Dataset):
         self.processor = processor
         #self._max_label_len = max([word_len_padding] + [len(self.labels[label]) for label in self.labels.text])
         self._max_label_len = max([word_len_padding] + [self.labels.text.map(len).max()])
-        
-    def __init__(self,lmdb_database: Path, label_file: Path):
-        if not lmdb_database.exists():
-            raise OSError(f'File {lmdb_database} does not exist!')
-
-        label_df = pd.read_csv(label_file, sep=" 0 ", header=None, engine='python')
-        label_df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
-        self.labels = label_df
-        self.image_database = lmdb.open(str(lmdb_database))
-        self.transaction = self.image_database.begin()
     
     def __len__(self):
         return len(self.labels)
