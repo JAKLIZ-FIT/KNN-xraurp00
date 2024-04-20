@@ -10,6 +10,7 @@ from trocr.src.util import load_processor, load_model
 from trocr.src.scripts import predict
 from dataset import LMDBDataset
 from context import Context
+from evaluate import load
 
 import pandas as pd
 
@@ -155,7 +156,6 @@ def main():
     references = label_df['text']
     predictions = df_combi['output']
     
-    from evaluate import load
     cer = load("cer")
     cer_score = cer.compute(predictions=predictions,references=references)
     print ("cer score = "+str(cer_score))

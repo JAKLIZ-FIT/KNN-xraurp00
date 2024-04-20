@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 from context import Context
 from dataset import LMDBDataset
+from evaluate import load
 import argparse
 import os
 import sys
@@ -128,7 +129,7 @@ def train_model(
             del loss, outputs
         
         if len(context.val_dataloader) > 0:
-            accuracy = validate(context=context, device=device)
+            c_accuracy, w_accuracy = validate(context=context, device=device)
             now = datetime.datetime.now()
             total_time = now - timestamp_start
             epoch_time = now - timestamp_last
@@ -139,7 +140,7 @@ def train_model(
             em = int(epoch_time.total_seconds() / 60) % 60
             es = int(epoch_time.total_seconds()) % 60
             print(f"Epoch: {1 + epoch}")
-            print(f"Accuracy: {accuracy}")
+            print(f"Accuracy: CAR={c_accuracy}, WAR={w_accuracy}")
             print(f"Time: {now}")
             print(f"Total time elapsed: {th}:{tm}:{ts}")
             print(f"Time per epoch: {eh}:{em}:{es}")
@@ -209,6 +210,7 @@ def get_confidence_scores(generated_ids) -> list[float]:
     # Get raw logits, with shape (examples,tokens,token_vals)
     logits = generated_ids.scores
     logits = torch.stack(list(logits),dim=1)
+    print(logits)
 
     # Transform logits to softmax and keep only the highest
     # (chosen) p for each token
@@ -247,25 +249,21 @@ def validate(
         dataloader=context.val_dataloader,
         device=device
     )
+    
     assert len(predictions) > 0
-
-    correct_count = 0
-    wrong_count = 0
-    for id, prediction in predictions:
-        label = context.val_dataset.get_label(id)
-        path = context.val_dataset.get_path(id)
-
-        # TODO - Use CER, WER, not whole label?
-        if prediction == label:
-            correct_count += 1
-        else:
-            wrong_count += 1
-            if print_wrong:
-                print(f"Predicted: \t{prediction}\nLabel: \t\t{label}\nPath: \t\t{path}")
-
-    if print_wrong:
-        print(f"\nCorrect: {correct_count}\nWrong: {wrong_count}")
-    return correct_count / (len(predictions))
+    
+    references = [context.val_dataset.get_label(id) for id, prediction in predictions]    
+    predictionsList = [prediction for id, prediction in predictions]
+    
+    cer = load("cer")
+    cer_score = cer.compute(predictions=predictions,references=references)
+    car_score = 1 - cer_score
+    
+    wer = load('wer')
+    wer_score = wer.compute(predictions=predictions,references=references)
+    war_score = 1 - wer_score
+    
+    return car_score,war_score
 
 def parse_args():
     parser = argparse.ArgumentParser('Train TrOCR model.')

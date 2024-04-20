@@ -35,6 +35,16 @@ class LMDBDataset(Dataset):
         self.processor = processor
         #self._max_label_len = max([word_len_padding] + [len(self.labels[label]) for label in self.labels.text])
         self._max_label_len = max([word_len_padding] + [self.labels.text.map(len).max()])
+        
+    def __init__(self,lmdb_database: Path, label_file: Path):
+        if not lmdb_database.exists():
+            raise OSError(f'File {lmdb_database} does not exist!')
+
+        label_df = pd.read_csv(label_file, sep=" 0 ", header=None, engine='python')
+        label_df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
+        self.labels = label_df
+        self.image_database = lmdb.open(str(lmdb_database))
+        self.transaction = self.image_database.begin()
     
     def __len__(self):
         return len(self.labels)
@@ -54,6 +64,43 @@ class LMDBDataset(Dataset):
         ).input_ids[0]
 
         return {'idx': idx, 'input': image_tensor, 'label': label_tensor}
+    
+    """
+    Returns an image from the LMDB, selected by id or key(=filename)
+    
+    Parameters:
+        idx index used by model
+        key filename of image as a string
+        
+    Returns dict(idx,image,label,filename)
+    """
+    def get_image(self, idx=None, key=None):
+        if idx != None:
+            key = self.get_path(idx)
+        elif key == None:
+            return None
+        image = Image.open(BytesIO(self.transaction.get(key.encode()))).convert('RGB')
+        label = self.get_label(idx)
+        return {'idx': idx, 'input': image, 'label': label, 'filename':key}
+    
+    """
+    Returns a list of images, their labels and filenames 
+    warning: returns multiple images (size) 
+
+    Parameters:
+        idxs : optional [int] list of ids
+        keys : [String] list of filenames
+        
+    Returns [dict(idx,image,label,filename)]
+    """
+    def get_images(self, idxs=[], keys=[]):
+        images = []
+        if idxs!=[]:
+            images = [self.get_image(idx=Idx) for Idx in idxs]
+        else:
+            images = [self.get_image(key=Key) for Key in keys]
+        return images
+            
     
     def get_label(self, idx) -> str:
         assert 0 <= idx < len(self.labels.file_name), f"id {idx} outside of bounds [0, {len(self.labels.file_name)}]"
