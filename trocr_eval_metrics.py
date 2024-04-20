@@ -36,7 +36,7 @@ def load_context(
     :param batch_size (int): batch size to use (defaults to 20)
     :return: tuple of lodeded (processor, model)
     """
-    for p in (model_path, train_ds_path, label_file_path, val_label_file_path):
+    for p in (model_path, val_label_file_path):
         if not p.exists():
             raise ValueError(f'Path {p} does not exist!')
     if val_ds_path and not val_ds_path.exists():
@@ -50,11 +50,6 @@ def load_context(
     model.config.vocab_size = model.config.decoder.vocab_size
 
     # load ds
-    train_ds = LMDBDataset(
-        lmdb_database=train_ds_path,
-        label_file=label_file_path,
-        processor=processor
-    )
     if not val_ds_path:
         val_ds_path = train_ds_path
     val_ds = LMDBDataset(
@@ -64,14 +59,13 @@ def load_context(
     )
 
     # create dataloaders
-    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
     val_dl = DataLoader(val_ds, batch_size=batch_size, num_workers=0)
 
     return Context(
         model=model,
         processor=processor,
-        train_dataset=train_ds,
-        train_dataloader=train_dl,
+        train_dataset=None,
+        train_dataloader=None,
         val_dataset=val_ds,
         val_dataloader=val_dl
     )
@@ -185,6 +179,8 @@ a
     """
     # Get raw logits, with shape (examples,tokens,token_vals)
     logits = generated_ids.scores
+    print(logits)
+    exit(0)
     logits = torch.stack(list(logits),dim=1)
 
     # Transform logits to softmax and keep only the highest
