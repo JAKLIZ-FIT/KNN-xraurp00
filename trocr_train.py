@@ -3,7 +3,6 @@
 from transformers import (
     TrOCRProcessor,
     VisionEncoderDecoderModel,
-    AdamW,
     get_linear_schedule_with_warmup
 )
 import torch
@@ -52,9 +51,6 @@ def load_context(
     for p in (model_path, train_ds_path, label_file_path, val_label_file_path):
         if not p.exists():
             raise ValueError(f'Path {p} does not exist!')
-    if val_ds_path == 'None':
-        print('yes')
-        val_ds_path = False
     if val_ds_path and not val_ds_path.exists():
         raise ValueError(f'Path {val_ds_path} does not exist!')
     
@@ -127,7 +123,7 @@ def train_model(
 
     model = context.model
     # TODO - use adam from pytorch # TODO optimizer as argument?
-    optimizer = AdamW(
+    optimizer = torch.optim.AdamW(
         params=model.parameters(),
         lr=5e-6  # TODO - lookup some good values
     )
@@ -139,11 +135,9 @@ def train_model(
         num_training_steps=num_training_steps
     )
 
-    if last_CAR_scores == None:
-        last_CAR_scores = deque(maxlen=num_checkpoints)
     do_delete_checkpoint = False
     oldest_score = None
-    oldest_checkpoint_path = checkpoint_path+"_fail"
+    oldest_checkpoint_path = save_path/"_fail"
     # just some value to generate error if dir does not exist 
 
     model.to(device)
@@ -190,11 +184,11 @@ def train_model(
 
             # save model as checkpoint
             checkpoint_name = "checkpoint"+str(current_epoch)
-            checkpoint_path = save_path + "_" + checkpoint_name
+            checkpoint_path = save_path / checkpoint_name
             
             if len(last_CAR_scores == last_scores_cnt): # enough last checkpoints stored
                 oldest_score = last_CAR_scores[0]
-                oldest_checkpoint_path = save_path+"_"+oldest_score[2]
+                oldest_checkpoint_path = save_path/(oldest_score[2])
 
             last_CAR_scores.append((current_epoch,c_accuracy,checkpoint_name))
             
@@ -277,7 +271,7 @@ def get_confidence_scores(generated_ids) -> list[float]:
     # Get raw logits, with shape (examples,tokens,token_vals)
     logits = generated_ids.scores
     logits = torch.stack(list(logits),dim=1)
-    print(logits)
+    #print(logits)
 
     # Transform logits to softmax and keep only the highest
     # (chosen) p for each token
@@ -433,7 +427,8 @@ def main():
         val_ds_path=config.validation_dataset,
         batch_size=config.batch_size
     )
-    exit(0)
+    #print(config)
+    #exit(0)
     # train the model
     #train_model(context=context, num_epochs=epochs, device=device, save_path=save_path)
     train_model(context=context, config=config, device=device)

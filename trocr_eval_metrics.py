@@ -187,11 +187,11 @@ def validate(
     predictionsList = [prediction for id, prediction in predictions]
     
     cer = load("cer")
-    cer_score = cer.compute(predictions=predictions,references=references)
+    cer_score = cer.compute(predictions=predictionsList,references=references)
     car_score = 1 - cer_score
     
     wer = load('wer')
-    wer_score = wer.compute(predictions=predictions,references=references)
+    wer_score = wer.compute(predictions=predictionsList,references=references)
     war_score = 1 - wer_score
     
     return car_score,war_score

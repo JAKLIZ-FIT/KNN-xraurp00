@@ -59,10 +59,11 @@ def load_config(args):
 
 
     # load last scores (also get last model checkpoint)
-    last_CAR_scores = load_last_scores(pre_config['save_path'],pre_config['num_checkpoints'])
+    last_CAR_scores = load_last_scores(Path(pre_config['save_path']),pre_config['num_checkpoints'])
     # TODO select last model
-    #pre_config['model'] = 
-    start_epoch = 0
+    last_score = last_CAR_scores[-1]
+    pre_config['model'] = pre_config['save_path'] + last_score[2]
+    start_epoch = last_score[0]
 
     return TrainConfig(
         model=Path(pre_config['model']),
