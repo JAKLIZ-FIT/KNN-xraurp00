@@ -92,7 +92,7 @@ def early_stop_check(last_CAR_scores : deque, threshold : int = 0):
     scores = list(last_CAR_scores) 
     improvements = [score[1] > scores[0][1] for score in scores] 
     #print(improvements)
-    if sum(improvements) == 0 and len(scores) == last_CAR_scores.max_length:
+    if sum(improvements) == 0 and len(scores) == last_CAR_scores.maxlen:
         return True
     else:
         return False
@@ -124,7 +124,7 @@ def train_model(
     # TODO save current epoch in context?
 
     start_epoch = config.start_epoch
-    num_epochs = config.epochs - start_epoch # Subtract finished epochs
+    num_epochs = config.epochs - start_epoch if start_epoch < config.epochs else 0 # Subtract finished epochs
     save_path  = config.save_path
     num_checkpoints = config.num_checkpoints
     last_CAR_scores = config.last_CAR_scores # TODO I would like to put this into context instead
@@ -153,7 +153,7 @@ def train_model(
     model.train()
     timestamp_start = datetime.datetime.now()
     timestamp_last = timestamp_start
-    print(f'Training started!\nTime: {timestamp_start}')
+    print(f'Training started!\nTime: {timestamp_start}\n')
 
     for epoch in range(num_epochs):
         for index, batch in enumerate(context.train_dataloader):
