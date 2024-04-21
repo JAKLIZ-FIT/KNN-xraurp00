@@ -20,6 +20,7 @@ import datetime
 
 from collections import deque
 import shutil
+import json
 
 # TODO check if necessary
 import csv
@@ -380,12 +381,45 @@ def parse_args():
         default=20,
         type=int
     )# TODO pass to train
+    parser.add_argument(
+        '-f', '--load-config',
+        help='Path to config file.',
+        type=Path,
+        default=None
+    )
     return parser.parse_args()
 
-def main():
-    args = parse_args()
-    # select device
-    device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
+    def parse_args_config():
+    parser = argparse.ArgumentParser('Train TrOCR model (config file mode).')
+    parser.add_argument(
+        '-f', '--config-path',
+        help='Path to config file.',
+        type=Path,
+        default=None
+    )
+    return parser.parse_args()
+
+def load_config(config_path : Path):
+    if not args.config_path.exists():
+        raise ValueError(f'Path {p} does not exist!')
+    with open(args.config_path,"r" as cf):
+        config = json.loads(cf.read())
+        context = load_context(
+            model_path = config[model], # TODO change to loading the last checkpoint
+            train_ds_path=config[training_dataset],
+            label_file_path=config[training_labels],
+            val_label_file_path=config[validation_labels],
+            val_ds_path=config[validation_dataset],
+            batch_size=config[batch_size]
+        )
+    return context, config[epochs], config[use_gpu], config[save_path]
+
+def save_config(args,save_path):
+    config = vars(args)
+    with open(save_path+"_confix.json","r") as cf:
+        cf.write(config)
+
+def load_args(args):
     # load model and dataset
     context = load_context(
         model_path=args.model,
@@ -395,8 +429,19 @@ def main():
         val_ds_path=args.validation_dataset,
         batch_size=args.batch_size
     )
+    return context, args.use_gpu, args.num_epochs, args.save_path
+
+def main():
+    use_config = False
+    
+    args = parse_args_config() if use_config else parse_args()
+    context, epochs, use_gpu, save_path = load_config(args.config_path) if use_config else load_args(args)
+    save_config(args, save_path)
+    # select device
+    device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
+        
     # train the model
-    train_model(context=context, num_epochs=args.epochs, device=device, save_path=args.save_path)
+    train_model(context=context, num_epochs=epochs, device=device, save_path=save_path)
     
     # save results # will be saved as the last checkpoint 
     #if not args.save_path.exists():
