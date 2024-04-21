@@ -4,7 +4,7 @@ from transformers import (
     TrOCRProcessor,
     VisionEncoderDecoderModel,
     get_linear_schedule_with_warmup
-)
+) #AdamW,
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -88,11 +88,19 @@ def load_context(
         val_dataloader=val_dl
     )
 
-def early_stop_check(last_CAR_scores : deque):
+def early_stop_check(last_CAR_scores : deque, threshold : int = 0):
     scores = list(last_CAR_scores) 
+    improvements = scores > scores[0]
+    print(improvements)
+    if sum(improvements) == 0 and len(scores) == last_CAR_scores.max_length
+        return True
+    else:
+        return False
+    last_score = (last_CAR_scores[-2])[1] if len(last_CAR_scores) > 1 else 0
+    new_score = (last_CAR_scores[-1])[1]
     #for score in last_CAR_scores:
     # TODO should I expect the possibility of model getting worse?
-    return (scores[-1] - scores[0]) < 0.001 # TODO select a good value
+    return (new_score - last_score) < threshold # TODO select a good value
 
 
 
@@ -123,10 +131,11 @@ def train_model(
 
     model = context.model
     # TODO - use adam from pytorch # TODO optimizer as argument?
+    # optimizer = AdamW(
     optimizer = torch.optim.AdamW(
         params=model.parameters(),
         lr=5e-6  # TODO - lookup some good values
-    )
+    ) 
     num_training_steps = num_epochs * len(context.train_dataloader)
     num_warmup_steps = int(num_training_steps / 10)
     scheduler = get_linear_schedule_with_warmup(
@@ -186,7 +195,7 @@ def train_model(
             checkpoint_name = "checkpoint"+str(current_epoch)
             checkpoint_path = save_path / checkpoint_name
             
-            if len(last_CAR_scores == last_scores_cnt): # enough last checkpoints stored
+            if len(last_CAR_scores) == num_checkpoints: # enough last checkpoints stored
                 oldest_score = last_CAR_scores[0]
                 oldest_checkpoint_path = save_path/(oldest_score[2])
 
@@ -201,11 +210,13 @@ def train_model(
             if oldest_checkpoint_path.exists():
                 shutil.rmtree(oldest_checkpoint_path)
 
-            if early_stop_check: # early stopping
+            if early_stop_check(last_CAR_scores,config.early_stop_threshold): # early stopping
                 save_last_scores(last_CAR_scores,save_path)
+                print('early stopping criterion satisfied')
                 return
     
     # TODO delete checkpoints?
+    print('Training finished!')
     save_last_scores(last_CAR_scores,save_path)
         
 
@@ -317,11 +328,11 @@ def validate(
     predictionsList = [prediction for id, prediction in predictions]
     
     cer = load("cer")
-    cer_score = cer.compute(predictions=predictions,references=references)
+    cer_score = cer.compute(predictions=predictionsList,references=references)
     car_score = 1 - cer_score
     
     wer = load('wer')
-    wer_score = wer.compute(predictions=predictions,references=references)
+    wer_score = wer.compute(predictions=predictionsList,references=references)
     war_score = 1 - wer_score
     
     return car_score,war_score
