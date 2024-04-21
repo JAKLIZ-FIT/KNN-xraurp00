@@ -18,7 +18,7 @@ def load_last_scores(save_path : Path, maxlen : int):
     scores_path = save_path / "scores.txt"
     d = deque(maxlen=maxlen)
     if not scores_path.exists():
-        print('No previous scores found, starting from epoch 0')
+        print('\nNo previous scores found, starting from epoch 0\n')
     else:
         with open(scores_path,"r") as f:
             for line in f.readlines():

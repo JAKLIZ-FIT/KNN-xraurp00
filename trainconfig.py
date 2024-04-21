@@ -55,9 +55,12 @@ def load_config(args):
         # TODO save with current epoch?
         # TODO save even when restarting? it could reset the start_epoch variable
         # right now it will look for file with last CAR scores to see what model to load, so saving epoch not necessary 
-        
+    
+    print("===============================")
+    print("======= Training config =======")
     for x,y in pre_config.items():
         print(f"{x}\t= {y}")
+    print("===============================")
 
     # load last scores (also get last model checkpoint)
     last_CAR_scores = load_last_scores(Path(pre_config['save_path']),pre_config['num_checkpoints'])
@@ -67,9 +70,9 @@ def load_config(args):
         last_score = last_CAR_scores[-1]
         pre_config['model'] = pre_config['save_path'] +"/"+ last_score[2]
         start_epoch = last_score[0]
-        print(f"found checkpoint from epoch {start_epoch}")
+        print(f"\nfound checkpoint from epoch {start_epoch}")
         print(f"path: {pre_config['model']}")
-        print(f"score: {last_score[1]}")
+        print(f"score: {last_score[1]}\n")
 
     return TrainConfig(
         model=Path(pre_config['model']),
@@ -91,6 +94,6 @@ def load_config(args):
 
 
 def save_config(config):
-    with open(str(config['save_path'])+"_config.json","w") as cf:
+    with open(config['save_path']/"config.json","w") as cf:
         cf.write(json.dumps(config))
     

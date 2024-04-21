@@ -90,9 +90,9 @@ def load_context(
 
 def early_stop_check(last_CAR_scores : deque, threshold : int = 0):
     scores = list(last_CAR_scores) 
-    improvements = scores > scores[0]
-    print(improvements)
-    if sum(improvements) == 0 and len(scores) == last_CAR_scores.max_length
+    improvements = [score[1] > scores[0][1] for score in scores] 
+    #print(improvements)
+    if sum(improvements) == 0 and len(scores) == last_CAR_scores.max_length:
         return True
     else:
         return False
@@ -123,10 +123,10 @@ def train_model(
     # TODO pass start epoch in main
     # TODO save current epoch in context?
 
-    num_epochs = config.epochs
+    start_epoch = config.start_epoch
+    num_epochs = config.epochs - start_epoch # Subtract finished epochs
     save_path  = config.save_path
     num_checkpoints = config.num_checkpoints
-    start_epoch = config.start_epoch
     last_CAR_scores = config.last_CAR_scores # TODO I would like to put this into context instead
 
     model = context.model
