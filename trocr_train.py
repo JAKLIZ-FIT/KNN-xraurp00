@@ -318,18 +318,19 @@ def validate(
     return car_score,war_score
 
 def parse_args():
+    do_use_config = '--use-config' in sys.argv
     parser = argparse.ArgumentParser('Train TrOCR model.')
     parser.add_argument(
         '-m', '--model',
         help='Path to the directory with model to use for initialization.',
         type=Path,
-        required=True
+        required=not do_use_config
     )
     parser.add_argument(
         '-t', '--training-dataset',
         help='Path to the training dataset directory.',
         type=Path,
-        required=True
+        required=not do_use_config
     )
     parser.add_argument(
         '-v', '--validation-dataset',
@@ -342,25 +343,25 @@ def parse_args():
         '-l', '--training-labels',
         help='Path to file with training dataset labels.',
         type=Path,
-        required=True
+        required=not do_use_config
     )
     parser.add_argument(
         '-c', '--validation-labels',
         help='Path to file with validation dataset labels.',
         type=Path,
-        required=True
+        required=not do_use_config
     )
     parser.add_argument(
         '-e', '--epochs',
         help='Number of epochs to use for training.',
         type=int,
-        required=True
+        required=not do_use_config
     )
     parser.add_argument(
         '-s', '--save-path',
         help='Path to direcotry where resulting trained model will be saved.',
         type=Path,
-        required=True
+        required=not do_use_config
     )
     parser.add_argument(
         '-b', '--batch-size',
@@ -380,16 +381,24 @@ def parse_args():
         help='Number of checkpoints to store. (default = 20)',
         default=20,
         type=int
-    )# TODO pass to train
+    )# TODO pass num_checkpoints to train()
     parser.add_argument(
-        '-f', '--load-config',
+        '-f', '--config-path',
         help='Path to config file.',
         type=Path,
         default=None
+        required=do_use_config
+    )
+    parser.add_argument(
+        '-u', '--use-config',
+        help='if set, load model using config file',
+        default=False,
+        action='store_true'
     )
     return parser.parse_args()
 
-    def parse_args_config():
+"""
+def parse_args_config():
     parser = argparse.ArgumentParser('Train TrOCR model (config file mode).')
     parser.add_argument(
         '-f', '--config-path',
@@ -398,6 +407,7 @@ def parse_args():
         default=None
     )
     return parser.parse_args()
+"""
 
 def load_config(config_path : Path):
     if not args.config_path.exists():
@@ -432,11 +442,11 @@ def load_args(args):
     return context, args.use_gpu, args.num_epochs, args.save_path
 
 def main():
-    use_config = False
-    
-    args = parse_args_config() if use_config else parse_args()
+    args = parse_args()
+    use_config = args.use_config
     context, epochs, use_gpu, save_path = load_config(args.config_path) if use_config else load_args(args)
-    save_config(args, save_path)
+    if not use_config: # TODO save with current epoch?
+        save_config(args, save_path)
     # select device
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
         
