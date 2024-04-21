@@ -92,16 +92,38 @@ def early_stop_check(last_CAR_scores : deque):
     return (scores[-1] - scores[0]) < 0.001 # TODO select a good value
 
 def save_last_scores(last_CAR_scores : deque, save_path : Path):
-    with open(save_path+"/scores.txt","w") as f:
+    with open(save_path+"_scores.txt","w") as f:
             f.write('\n'.join('{} {} {}'.format(x[0],x[1],x[2]) for x in last_CAR_scores)) 
             #https://stackoverflow.com/questions/3820312/python-write-a-list-of-tuples-to-a-file
-    
+
+def load_last_scores(save_path : Path, maxlen : int):
+    """
+    Load last maxlen training scores.
+
+    :param save_path: save path for model checkpoints and scores
+    :param maxlen: number of last scores to keep
+
+    Returns deque with last scores, empty deque if no previous scores available
+    """
+    scores_path = save_path + "_scores.txt","r") as f:
+    d = deque(maxlen=maxlen)
+    if not scores_path.exists():
+        print('No previous scores found, starting from epoch 0')
+    else:
+        with (scores_path,"r") as f:
+            for line in f.readlines():
+                data = line.split():
+                d.append((int(data[0], float(data[1], data[2]))))
+    return d
 
 def train_model(
     context: Context,
     num_epochs: int,
     device: torch.device,
-    save_path: Path = ""
+    save_path: Path = "",
+    num_checkpoints: int = 20,
+    start_epoch: int = 0,
+    last_CAR_scores: deque = None
 ):
     """
     Train the provided model.
@@ -114,6 +136,9 @@ def train_model(
     :param num_epochs: number of epochs
     :param device: device to use for training
     """
+    # TODO pass start epoch in main
+    # TODO save current epoch in context?
+
     model = context.model
     # TODO - use adam from pytorch
     optimizer = AdamW(
@@ -128,8 +153,8 @@ def train_model(
         num_training_steps=num_training_steps
     )
 
-    last_scores_cnt = 20 # TODO add as an argument
-    last_CAR_scores = deque(maxlen=last_scores_cnt)
+    if last_CAR_scores == None:
+        last_CAR_scores = deque(maxlen=num_checkpoints)
     do_delete_checkpoint = False
     oldest_score = None
     oldest_checkpoint_path = checkpoint_path+"_fail"
@@ -167,21 +192,25 @@ def train_model(
             eh = int(int(epoch_time.total_seconds() / 60) / 60)
             em = int(epoch_time.total_seconds() / 60) % 60
             es = int(epoch_time.total_seconds()) % 60
-            print(f"Epoch: {1 + epoch}")
+
+            current_epoch = 1 + epoch + start_epoch # indexing from 1 !
+            
+            print(f"Epoch: {current_epoch}")
             print(f"Accuracy: CAR={c_accuracy}, WAR={w_accuracy}")
             print(f"Time: {now}")
             print(f"Total time elapsed: {th}:{tm}:{ts}")
             print(f"Time per epoch: {eh}:{em}:{es}")
             timestamp_last = now
 
-            checkpoint_name = "checkpoint"+str(1+epoch)
+            # save model as checkpoint
+            checkpoint_name = "checkpoint"+str(current_epoch)
             checkpoint_path = save_path + "_" + checkpoint_name
             
             if len(last_CAR_scores == last_scores_cnt): # enough last checkpoints stored
                 oldest_score = last_CAR_scores[0]
                 oldest_checkpoint_path = save_path+"_"+oldest_score[2]
 
-            last_CAR_scores.append((1+epoch,c_accuracy,checkpoint_name))
+            last_CAR_scores.append((current_epoch,c_accuracy,checkpoint_name))
             
             if not checkpoint_path.exists(): # save checkpoint
                 os.makedirs(checkpoint_path)
@@ -395,19 +424,13 @@ def parse_args():
         default=False,
         action='store_true'
     )
-    return parser.parse_args()
-
-"""
-def parse_args_config():
-    parser = argparse.ArgumentParser('Train TrOCR model (config file mode).')
     parser.add_argument(
-        '-f', '--config-path',
-        help='Path to config file.',
-        type=Path,
-        default=None
-    )
+        '-e', '--early-stop',
+        help='Early stopping critterion threshold.',
+        type=float
+        default=0.0001
+    ) # TODO find a good value
     return parser.parse_args()
-"""
 
 def load_config(config_path : Path):
     if not args.config_path.exists():
@@ -422,7 +445,13 @@ def load_config(config_path : Path):
             val_ds_path=config[validation_dataset],
             batch_size=config[batch_size]
         )
-    return context, config[epochs], config[use_gpu], config[save_path]
+        train_config = TrainConfig(num_checkpoints=config[num_checkpoints],
+            use_gpu=config[use_gpu],
+            save_path=config[save_path],
+            epochs=config[epochs],
+            early_stop_threshold=config[early_stop_threshold]
+        )
+    return context, train_config 
 
 def save_config(args,save_path):
     config = vars(args)
@@ -439,20 +468,39 @@ def load_args(args):
         val_ds_path=args.validation_dataset,
         batch_size=args.batch_size
     )
-    return context, args.use_gpu, args.num_epochs, args.save_path
+    train_config = TrainConfig(num_checkpoints=args.num_checkpoints,
+        use_gpu=args.use_gpu,
+        save_path=args.save_path,
+        epochs=args.epochs,
+        early_stop_threshold=args.early_stop_threshold
+    )
+    return context, train_config
+
+def get_last_model_num(save_path : Path):
+    if not save_path.exists():
+        raise
 
 def main():
     args = parse_args()
     use_config = args.use_config
-    context, epochs, use_gpu, save_path = load_config(args.config_path) if use_config else load_args(args)
-    if not use_config: # TODO save with current epoch?
-        save_config(args, save_path)
-    # select device
-    device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
-        
-    # train the model
-    train_model(context=context, num_epochs=epochs, device=device, save_path=save_path)
+    context, train_config = load_config(args.config_path) if use_config else load_args(args)
     
+    last_CAR_scores = load_last_scores(train_config.save_path,train_config.num_checkpoints)
+
+    # save config
+    if not use_config: # TODO save with current epoch?
+        save_config(args, save_path) # TODO save even when restarting?
+        # right now it will look for file with last CAR scores to see what model to load, so saving epoch not necessary 
+
+    exit(0)
+
+    # select device
+    device = torch.device('cuda') if train_config.use_gpu else torch.device('cpu')
+
+    # train the model
+    #train_model(context=context, num_epochs=epochs, device=device, save_path=save_path)
+    train_model(context=context, config=train_config)
+
     # save results # will be saved as the last checkpoint 
     #if not args.save_path.exists():
     #    os.makedirs(args.save_path)
