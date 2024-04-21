@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from pathlib import Path
 from context import Context
+from trainconfig import *
 from dataset import LMDBDataset
 from evaluate import load
 import argparse
@@ -18,9 +19,12 @@ import os
 import sys
 import datetime
 
-from collections import deque
+
+from checkpoint_scores import *
+
+
 import shutil
-import json
+
 
 # TODO check if necessary
 import csv
@@ -48,6 +52,9 @@ def load_context(
     for p in (model_path, train_ds_path, label_file_path, val_label_file_path):
         if not p.exists():
             raise ValueError(f'Path {p} does not exist!')
+    if val_ds_path == 'None':
+        print('yes')
+        val_ds_path = False
     if val_ds_path and not val_ds_path.exists():
         raise ValueError(f'Path {val_ds_path} does not exist!')
     
@@ -91,39 +98,12 @@ def early_stop_check(last_CAR_scores : deque):
     # TODO should I expect the possibility of model getting worse?
     return (scores[-1] - scores[0]) < 0.001 # TODO select a good value
 
-def save_last_scores(last_CAR_scores : deque, save_path : Path):
-    with open(save_path+"_scores.txt","w") as f:
-            f.write('\n'.join('{} {} {}'.format(x[0],x[1],x[2]) for x in last_CAR_scores)) 
-            #https://stackoverflow.com/questions/3820312/python-write-a-list-of-tuples-to-a-file
 
-def load_last_scores(save_path : Path, maxlen : int):
-    """
-    Load last maxlen training scores.
-
-    :param save_path: save path for model checkpoints and scores
-    :param maxlen: number of last scores to keep
-
-    Returns deque with last scores, empty deque if no previous scores available
-    """
-    scores_path = save_path + "_scores.txt","r") as f:
-    d = deque(maxlen=maxlen)
-    if not scores_path.exists():
-        print('No previous scores found, starting from epoch 0')
-    else:
-        with (scores_path,"r") as f:
-            for line in f.readlines():
-                data = line.split():
-                d.append((int(data[0], float(data[1], data[2]))))
-    return d
 
 def train_model(
     context: Context,
-    num_epochs: int,
+    config: TrainConfig,
     device: torch.device,
-    save_path: Path = "",
-    num_checkpoints: int = 20,
-    start_epoch: int = 0,
-    last_CAR_scores: deque = None
 ):
     """
     Train the provided model.
@@ -139,8 +119,14 @@ def train_model(
     # TODO pass start epoch in main
     # TODO save current epoch in context?
 
+    num_epochs = config.epochs
+    save_path  = config.save_path
+    num_checkpoints = config.num_checkpoints
+    start_epoch = config.start_epoch
+    last_CAR_scores = config.last_CAR_scores # TODO I would like to put this into context instead
+
     model = context.model
-    # TODO - use adam from pytorch
+    # TODO - use adam from pytorch # TODO optimizer as argument?
     optimizer = AdamW(
         params=model.parameters(),
         lr=5e-6  # TODO - lookup some good values
@@ -218,7 +204,7 @@ def train_model(
             context.model.save_pretrained(save_directory=checkpoint_path)
 
             # delete oldest checkpoint
-            if oldest_checkpoint_path.exists()
+            if oldest_checkpoint_path.exists():
                 shutil.rmtree(oldest_checkpoint_path)
 
             if early_stop_check: # early stopping
@@ -415,7 +401,7 @@ def parse_args():
         '-f', '--config-path',
         help='Path to config file.',
         type=Path,
-        default=None
+        default=None,
         required=do_use_config
     )
     parser.add_argument(
@@ -425,81 +411,32 @@ def parse_args():
         action='store_true'
     )
     parser.add_argument(
-        '-e', '--early-stop',
+        '-r', '--early-stop',
         help='Early stopping critterion threshold.',
-        type=float
+        type=float,
         default=0.0001
     ) # TODO find a good value
     return parser.parse_args()
 
-def load_config(config_path : Path):
-    if not args.config_path.exists():
-        raise ValueError(f'Path {p} does not exist!')
-    with open(args.config_path,"r" as cf):
-        config = json.loads(cf.read())
-        context = load_context(
-            model_path = config[model], # TODO change to loading the last checkpoint
-            train_ds_path=config[training_dataset],
-            label_file_path=config[training_labels],
-            val_label_file_path=config[validation_labels],
-            val_ds_path=config[validation_dataset],
-            batch_size=config[batch_size]
-        )
-        train_config = TrainConfig(num_checkpoints=config[num_checkpoints],
-            use_gpu=config[use_gpu],
-            save_path=config[save_path],
-            epochs=config[epochs],
-            early_stop_threshold=config[early_stop_threshold]
-        )
-    return context, train_config 
-
-def save_config(args,save_path):
-    config = vars(args)
-    with open(save_path+"_confix.json","r") as cf:
-        cf.write(config)
-
-def load_args(args):
-    # load model and dataset
-    context = load_context(
-        model_path=args.model,
-        train_ds_path=args.training_dataset,
-        label_file_path=args.training_labels,
-        val_label_file_path=args.validation_labels,
-        val_ds_path=args.validation_dataset,
-        batch_size=args.batch_size
-    )
-    train_config = TrainConfig(num_checkpoints=args.num_checkpoints,
-        use_gpu=args.use_gpu,
-        save_path=args.save_path,
-        epochs=args.epochs,
-        early_stop_threshold=args.early_stop_threshold
-    )
-    return context, train_config
-
-def get_last_model_num(save_path : Path):
-    if not save_path.exists():
-        raise
-
 def main():
     args = parse_args()
-    use_config = args.use_config
-    context, train_config = load_config(args.config_path) if use_config else load_args(args)
-    
-    last_CAR_scores = load_last_scores(train_config.save_path,train_config.num_checkpoints)
-
-    # save config
-    if not use_config: # TODO save with current epoch?
-        save_config(args, save_path) # TODO save even when restarting?
-        # right now it will look for file with last CAR scores to see what model to load, so saving epoch not necessary 
-
-    exit(0)
-
+    # load configuration
+    config = load_config(args)
     # select device
-    device = torch.device('cuda') if train_config.use_gpu else torch.device('cpu')
-
+    device = torch.device('cuda') if config.use_gpu else torch.device('cpu')
+    # load model and dataset
+    context = load_context(
+        model_path=config.model,
+        train_ds_path=config.training_dataset,
+        label_file_path=config.training_labels,
+        val_label_file_path=config.validation_labels,
+        val_ds_path=config.validation_dataset,
+        batch_size=config.batch_size
+    )
+    exit(0)
     # train the model
     #train_model(context=context, num_epochs=epochs, device=device, save_path=save_path)
-    train_model(context=context, config=train_config)
+    train_model(context=context, config=config, device=device)
 
     # save results # will be saved as the last checkpoint 
     #if not args.save_path.exists():

@@ -1,11 +1,89 @@
 from dataclasses import dataclass
+from collections import deque
+from pathlib import Path
+import json
+import argparse
+from checkpoint_scores import *
+
 
 @dataclass
 class TrainConfig:
-    num_checkpoints : int
-    epochs: int 
-    use_gpu: bool
-    save_path: Path
-    early_stop_threshold: float
+    model : Path
 
+    training_dataset : Path
+    validation_dataset : Path
+    
+    training_labels : Path
+    validation_labels : Path
+
+    epochs : int 
+    save_path : Path
+    batch_size : int
+    use_gpu: bool
+    num_checkpoints : int
+    early_stop_threshold: float
+    use_config : bool
+    config_path : Path
+    start_epoch: int = 0
+    last_CAR_scores: deque = None
+
+
+def load_config(args):
+    use_config = args.use_config
+    pre_config = {}
+    if use_config:
+        if not args.config_path.exists():
+            raise ValueError(f'Path {args.config_path} does not exist!')
+        with open(args.config_path,"r") as cf:
+            pre_config = json.loads(cf.read())
+    else:
+        pre_config['model'] = str(args.model)
+        pre_config['training_dataset'] = str(args.training_dataset)
+        pre_config['validation_dataset'] = str(args.validation_dataset)
+        pre_config['training_labels'] = str(args.training_labels)
+        pre_config['validation_labels'] = str(args.validation_labels)
+        pre_config['epochs'] = args.epochs
+        pre_config['save_path'] = str(args.save_path)
+        pre_config['batch_size'] = args.batch_size
+        pre_config['use_gpu'] = args.use_gpu
+        pre_config['num_checkpoints'] = args.num_checkpoints
+        pre_config['early_stop'] = args.early_stop
+        pre_config['config_path'] = str(args.config_path)
+        pre_config['start_epoch'] = 0
+
+        save_config(pre_config)
+        # TODO save with current epoch?
+        # TODO save even when restarting? it could reset the start_epoch variable
+        # right now it will look for file with last CAR scores to see what model to load, so saving epoch not necessary 
+        
+
+
+    # load last scores (also get last model checkpoint)
+    last_CAR_scores = load_last_scores(pre_config['save_path'],pre_config['num_checkpoints'])
+    # TODO select last model
+    #pre_config['model'] = 
+    start_epoch = 0
+
+    return TrainConfig(
+        model=Path(pre_config['model']),
+        training_dataset=Path(pre_config['training_dataset']),
+        validation_dataset=Path(pre_config['validation_dataset']) if pre_config['validation_dataset'] != 'None' else None,
+        training_labels=Path(pre_config['training_labels']),
+        validation_labels=Path(pre_config['validation_labels']),
+        epochs=pre_config['epochs'],
+        save_path=Path(pre_config['save_path']),
+        batch_size=pre_config['batch_size'],
+        use_gpu=pre_config['use_gpu'],
+        num_checkpoints=pre_config['num_checkpoints'],
+        early_stop_threshold=pre_config['early_stop'],
+        use_config=use_config,
+        config_path=Path(pre_config['config_path']),
+        start_epoch=start_epoch,
+        last_CAR_scores=last_CAR_scores
+    )
+
+
+def save_config(config):
+    with open(str(config['save_path'])+"_config.json","w") as cf:
+        cf.write(json.dumps(config))
     
