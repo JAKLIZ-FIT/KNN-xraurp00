@@ -26,6 +26,9 @@ class TrainConfig:
     config_path : Path
     start_epoch: int = 0
     last_CAR_scores: deque = None
+    stat_history: deque = None
+    #stat_history_json = None
+    
 
 
 def load_config(args):
@@ -74,6 +77,9 @@ def load_config(args):
         print(f"path: {pre_config['model']}")
         print(f"score: {last_score[1]}\n")
 
+    #stat_history_json = load_stat_history_json(Path(pre_config['save_path']))
+    stat_history = load_stat_history(Path(pre_config['save_path']))
+
     return TrainConfig(
         model=Path(pre_config['model']),
         training_dataset=Path(pre_config['training_dataset']),
@@ -89,11 +95,12 @@ def load_config(args):
         use_config=use_config,
         config_path=Path(pre_config['config_path']),
         start_epoch=start_epoch,
-        last_CAR_scores=last_CAR_scores
+        last_CAR_scores=last_CAR_scores,
+        stat_history=stat_history
     )
 
 
 def save_config(config):
     with open(config['save_path']/"config.json","w") as cf:
-        cf.write(json.dumps(config))
+        cf.write(json.dumps(config,indent=2))
     

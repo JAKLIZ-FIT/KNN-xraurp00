@@ -128,6 +128,7 @@ def train_model(
     save_path  = config.save_path
     num_checkpoints = config.num_checkpoints
     last_CAR_scores = config.last_CAR_scores # TODO I would like to put this into context instead
+    stat_history = config.stat_history
 
     model = context.model
     # TODO - use adam from pytorch # TODO optimizer as argument?
@@ -156,6 +157,7 @@ def train_model(
     print(f'Training started!\nTime: {timestamp_start}\n')
 
     for epoch in range(num_epochs):
+        loss_buffer = []
         for index, batch in enumerate(context.train_dataloader):
             inputs: torch.Tensor = batch['input'].to(device)
             labels: torch.Tensor = batch['label'].to(device)
@@ -163,6 +165,8 @@ def train_model(
             outputs = model(pixel_values=inputs, labels=labels)
             loss = outputs.loss
             loss.backward()
+
+            loss_buffer.append(loss.item())
 
             optimizer.step()
             scheduler.step()
@@ -200,6 +204,10 @@ def train_model(
                 oldest_checkpoint_path = save_path/(oldest_score[2])
 
             last_CAR_scores.append((current_epoch,c_accuracy,checkpoint_name))
+
+            avg_loss_train = sum(loss_buffer) / len(loss_buffer)
+            print(f"Average loss: {avg_loss}")
+            stat_history.append((current_epoch,checkpoint_name,avg_loss_train,c_accuracy,w_accuracy))
             
             if not checkpoint_path.exists(): # save checkpoint
                 os.makedirs(checkpoint_path)
@@ -212,12 +220,14 @@ def train_model(
 
             if early_stop_check(last_CAR_scores,config.early_stop_threshold): # early stopping
                 save_last_scores(last_CAR_scores,save_path)
+                save_stat_history(stat_history,save_path)
                 print('early stopping criterion satisfied')
                 return
     
     # TODO delete checkpoints?
     print('Training finished!')
     save_last_scores(last_CAR_scores,save_path)
+    save_stat_history(stat_history,save_path)
         
 
 def predict(
@@ -251,6 +261,7 @@ def predict(
                 return_dict_in_generate=True,
                 output_scores = True
             )
+            #print(generated_ids) # TODO remove
             generated_text = processor.batch_decode(
                 generated_ids.sequences,
                 skip_special_tokens=True
@@ -266,6 +277,10 @@ def predict(
             confidence_scores.extend(zip(ids, batch_confidence_scores))
 
     return output, confidence_scores
+
+#def get_loss(generated_ids):
+#    logits = generated_ids.scores
+#    loss_fct = torch.nn.CrossEntropyLoss()
 
 def get_confidence_scores(generated_ids) -> list[float]:
     """
