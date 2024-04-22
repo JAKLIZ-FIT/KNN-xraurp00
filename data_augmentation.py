@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from dataclasses import dataclass
 from pathlib import Path
 import cv2
@@ -166,10 +168,10 @@ def augment_images(key: str, image_bytes: bytes, label: str, other_image_bytes: 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Augment images in the LMDB database.")
-    parser.add_argument("database_path", type=str, help="Path to the LMDB database.")
-    parser.add_argument("label_file", type=str, help="Path to the label file.")
-    parser.add_argument("output_db_path", type=str, help="Path to the output LMDB database.")
-    parser.add_argument("output_label_file", type=str, help="Path to the output label file.")
+    parser.add_argument("--database-path", type=str, help="Path to the LMDB database.")
+    parser.add_argument("--label-file", type=str, help="Path to the label file.")
+    parser.add_argument("--output-db-path", type=str, help="Path to the output LMDB database.")
+    parser.add_argument("--output-label-file", type=str, help="Path to the output label file.")
     args = parser.parse_args()
 
     augment_ds(args.database_path, args.output_db_path, args.label_file, args.output_label_file)

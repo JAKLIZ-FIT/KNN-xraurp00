@@ -4,6 +4,9 @@ pandas
 evaluate
 jiwer
 
+# augmantations
+opencv-python
+
 # TrOCR
 torch
 torchvision

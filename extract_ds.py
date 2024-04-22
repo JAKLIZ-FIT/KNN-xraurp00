@@ -31,7 +31,6 @@ def extract_ds(source_path: str, target_path: str, n: int = 0, key="") -> None:
             output = os.path.join(target_path, key)
             with open(output, 'wb') as output_file:
                 output_file.write(value)
-            
 
 def parse_args():
     parser = argparse.ArgumentParser('Extract lmdb to folder.')
