@@ -101,6 +101,10 @@ def load_config(args):
 
 
 def save_config(config):
-    with open(config['save_path']/"config.json","w") as cf:
+    #with open(,"w") as cf: # TODO select this if config is actual config class instance
+    config_path = config['save_path']/"config.json" if type(config) == TrainConfig else config['save_path']+"/config.json"
+    if not config_path.exists(): # save checkpoint
+                os.makedirs(config_path)
+    with open(config_path,"w") as cf:
         cf.write(json.dumps(config,indent=2))
     
