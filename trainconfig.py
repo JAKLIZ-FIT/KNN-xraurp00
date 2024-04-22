@@ -3,6 +3,7 @@ from collections import deque
 from pathlib import Path
 import json
 import argparse
+import os
 from checkpoint_scores import *
 
 
@@ -101,10 +102,10 @@ def load_config(args):
 
 
 def save_config(config):
-    #with open(,"w") as cf: # TODO select this if config is actual config class instance
-    config_path = config['save_path']/"config.json" if type(config) == TrainConfig else config['save_path']+"/config.json"
-    if not config_path.exists(): # save checkpoint
-                os.makedirs(config_path)
+    save_path = config.save_path if type(config) == TrainConfig else Path(config['save_path'])
+    config_path = save_path/"config.json"
+    if not save_path.exists():
+                os.makedirs(save_path)
     with open(config_path,"w") as cf:
         cf.write(json.dumps(config,indent=2))
     
