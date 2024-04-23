@@ -144,8 +144,7 @@ def train_model(
     # optimizer = AdamW( # original, deprecated
     optimizer = torch.optim.AdamW(
         params=model.parameters(),
-        lr=5e-5  # TODO - lookup some good values
-        # lr=5e-6 original
+        lr=config.learning_rate # lr=5e-6 original # TODO - lookup some good values
     ) 
     num_training_steps = num_epochs * len(context.train_dataloader)
     num_warmup_steps = int(num_training_steps / 10)

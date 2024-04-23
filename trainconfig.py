@@ -19,6 +19,7 @@ class TrainConfig:
     validation_labels : Path
 
     epochs : int 
+    learning_rate: float
     save_path : Path
     batch_size : int
     use_gpu: bool
@@ -57,6 +58,8 @@ def load_config(args):
         pre_config['early_stop'] = args.early_stop
         pre_config['config_path'] = str(args.config_path)
         pre_config['start_epoch'] = 0
+        pre_config['best_epoch'] = 0
+        pre_config['learning_rate'] = 5e-5 # TODO as argument?
 
 
     # load last scores (also get last model checkpoint)
@@ -108,7 +111,8 @@ def load_config(args):
         start_epoch=pre_config['start_epoch'],
         best_epoch=pre_config['best_epoch'],
         last_val_loss_scores=last_val_loss_scores,
-        stat_history=stat_history
+        stat_history=stat_history,
+        learning_rate=pre_config['learning_rate']
     )
 
 
