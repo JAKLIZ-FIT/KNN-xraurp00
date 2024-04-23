@@ -1,15 +1,31 @@
 from collections import deque
 from pathlib import Path
+import json
 
-def save_last_scores(last_CAR_scores : deque, save_path : Path):
-    with open(save_path/"scores.txt","w") as f:
-            f.write('\n'.join('{} {} {}'.format(x[0],x[1],x[2]) for x in last_CAR_scores)) 
-            #https://stackoverflow.com/questions/3820312/python-write-a-list-of-tuples-to-a-file
+def save_last_scores(last_val_loss_scores : deque, save_path : Path):
+    with open(save_path/"scores.txt","w") as f: # TODO mark best model
+        f.write(f'best epoch= {get_best_score_epoch(last_val_loss_scores)[0]}\n')
+        f.write('\n'.join('{} {} {}'.format(x[0],x[1],x[2]) for x in last_val_loss_scores)) 
+        #https://stackoverflow.com/questions/3820312/python-write-a-list-of-tuples-to-a-file
+
+"""
+Returns tuple (epoch,val_loss,checkpoint_name)
+that has the best val_loss so far
+"""
+def get_best_score_epoch(last_val_loss_scores):
+    return min(last_val_loss_scores, key=lambda item: item[1])
+    
+
+#def save_stat_history(stat_history : deque, save_path : Path):
+#    with open(save_path/"stat_history.txt","w") as f:
+#            f.write('epoch\tcheckpoint\tavgloss\tCAR\tWAR\n')
+#            f.write('\n'.join('{}\t{}\t{}\t{}\t{}'.format(x[0],x[1],x[2],x[3],x[4]) for x in stat_history)) 
+#            #https://stackoverflow.com/questions/3820312/python-write-a-list-of-tuples-to-a-file
 
 def save_stat_history(stat_history : deque, save_path : Path):
     with open(save_path/"stat_history.txt","w") as f:
-            f.write('epoch\tcheckpoint\tavgloss\tCAR\tWAR\n')
-            f.write('\n'.join('{}\t{}\t{}\t{}\t{}'.format(x[0],x[1],x[2],x[3],x[4]) for x in stat_history)) 
+            f.write('[epoch, checkpoint, trn_loss_avg, trn_loss_max, trn_loss_min, val_loss_avg, val_loss_max, val_loss_min, CAR, WAR]\n')
+            f.write('\n'.join(json.dumps(x) for x in stat_history)) 
             #https://stackoverflow.com/questions/3820312/python-write-a-list-of-tuples-to-a-file
 
 def load_last_scores(save_path : Path, maxlen : int):
@@ -29,6 +45,8 @@ def load_last_scores(save_path : Path, maxlen : int):
         with open(scores_path,"r") as f:
             for line in f.readlines():
                 data = line.split()
+                if data[0] == 'best':
+                    continue
                 d.append((int(data[0]), float(data[1]), data[2]))
     return d
 
@@ -43,13 +61,18 @@ def load_stat_history(save_path : Path):
     """
     scores_path = save_path / "stat_history.txt"
     d = deque()
+    is_first = True
     if not scores_path.exists():
         print('\nNo history found\n')
     else:
         with open(scores_path,"r") as f:
             for line in f.readlines():
-                data = line.split()
-                d.append((int(data[0]), data[1], float(data[2]), float(data[3]), float(data[4])))
+                if is_first:
+                    is_first=False
+                    continue
+                #data = line.split()
+                #d.append((int(data[0]), data[1], float(data[2]), float(data[3]), float(data[4])))
+                d.append(json.loads(line))
     return d
 
 def load_stat_history_json(save_path : Path):

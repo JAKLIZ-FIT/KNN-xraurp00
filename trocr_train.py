@@ -18,6 +18,7 @@ import os
 import sys
 import datetime
 
+#import time # TODO remove, only for testing (sleep)
 
 from checkpoint_scores import *
 
@@ -76,8 +77,8 @@ def load_context(
     )
 
     # create dataloaders
-    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
-    val_dl = DataLoader(val_ds, batch_size=batch_size, num_workers=0)
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2) # TODO was 0
+    val_dl = DataLoader(val_ds, batch_size=batch_size, num_workers=2) # TODO was 0
 
     return Context(
         model=model,
@@ -88,20 +89,30 @@ def load_context(
         val_dataloader=val_dl
     )
 
-def early_stop_check(last_CAR_scores : deque, threshold : int = 0):
-    scores = list(last_CAR_scores) 
-    improvements = [score[1] > scores[0][1] for score in scores] 
-    #print(improvements)
-    if sum(improvements) == 0 and len(scores) == last_CAR_scores.maxlen:
-        return True
-    else:
-        return False
-    last_score = (last_CAR_scores[-2])[1] if len(last_CAR_scores) > 1 else 0
-    new_score = (last_CAR_scores[-1])[1]
-    #for score in last_CAR_scores:
-    # TODO should I expect the possibility of model getting worse?
-    return (new_score - last_score) < threshold # TODO select a good value
+#def early_stop_check(last_CAR_scores : deque, threshold : int = 0):
+#    scores = list(last_CAR_scores) 
+#    improvements = [score[1] > scores[0][1] for score in scores] 
+#    #print(improvements)
+#    if sum(improvements) == 0 and len(scores) == last_CAR_scores.maxlen:
+#        return True
+#    else:
+#        return False
+#    last_score = (last_CAR_scores[-2])[1] if len(last_CAR_scores) > 1 else 0
+#    new_score = (last_CAR_scores[-1])[1]
+#    #for score in last_CAR_scores:
+#    # TODO should I expect the possibility of model getting worse?
+#    return (new_score - last_score) < threshold # TODO select a good value
 
+def early_stop_check(last_val_loss_scores : deque, threshold : int = 0, num_checkpoints : int = 0):
+    if len(last_val_loss_scores) < num_checkpoints:
+        return False
+    improvements = [score[5] < last_val_loss_scores[0][5] for score in last_val_loss_scores] 
+    return sum(improvements) == 0
+
+    #last_score = (last_CAR_scores[-2])[1] if len(last_CAR_scores) > 1 else 0
+    #new_score = (last_CAR_scores[-1])[1]
+    #for score in last_CAR_scores:
+    #return (new_score - last_score) < threshold # TODO select a good value
 
 
 def train_model(
@@ -120,22 +131,21 @@ def train_model(
     :param num_epochs: number of epochs
     :param device: device to use for training
     """
-    # TODO pass start epoch in main
-    # TODO save current epoch in context?
 
     start_epoch = config.start_epoch
     num_epochs = config.epochs - start_epoch if start_epoch < config.epochs else 0 # Subtract finished epochs
     save_path  = config.save_path
     num_checkpoints = config.num_checkpoints
-    last_CAR_scores = config.last_CAR_scores # TODO I would like to put this into context instead
+    last_val_loss_scores = config.last_val_loss_scores # TODO I would like to put this into context instead
     stat_history = config.stat_history
 
     model = context.model
-    # TODO - use adam from pytorch # TODO optimizer as argument?
-    # optimizer = AdamW(
+    # TODO optimizer as argument?
+    # optimizer = AdamW( # original, deprecated
     optimizer = torch.optim.AdamW(
         params=model.parameters(),
-        lr=5e-6  # TODO - lookup some good values
+        lr=5e-5  # TODO - lookup some good values
+        # lr=5e-6 original
     ) 
     num_training_steps = num_epochs * len(context.train_dataloader)
     num_warmup_steps = int(num_training_steps / 10)
@@ -157,7 +167,9 @@ def train_model(
     print(f'Training started!\nTime: {timestamp_start}\n')
 
     for epoch in range(num_epochs):
-        loss_buffer = []
+        model.train()
+        trn_loss_buffer = []
+        val_loss_buffer = []
         for index, batch in enumerate(context.train_dataloader):
             inputs: torch.Tensor = batch['input'].to(device)
             labels: torch.Tensor = batch['label'].to(device)
@@ -166,15 +178,32 @@ def train_model(
             loss = outputs.loss
             loss.backward()
 
-            loss_buffer.append(loss.item())
+            trn_loss_buffer.append(loss.item())
 
             optimizer.step()
             scheduler.step()
             optimizer.zero_grad(set_to_none=True)
 
             del loss, outputs
+
+            #for i in range(100):
+            #w    time.sleep(5)
         
         if len(context.val_dataloader) > 0:
+            print(f'Validation stage : time: {datetime.datetime.now()}\n')
+            with torch.no_grad():
+                model.eval()
+                for index, batch in enumerate(context.val_dataloader):
+                    inputs: torch.Tensor = batch['input'].to(device)
+                    labels: torch.Tensor = batch['label'].to(device)
+
+                    outputs = model(pixel_values=inputs, labels=labels)
+                    loss = outputs.loss
+                    val_loss_buffer.append(loss.item())
+                    del loss, outputs
+
+            print(f'Accuracy computation : time: {datetime.datetime.now()}\n')
+
             c_accuracy, w_accuracy = validate(context=context, device=device)
             now = datetime.datetime.now()
             total_time = now - timestamp_start
@@ -199,15 +228,20 @@ def train_model(
             checkpoint_name = "checkpoint"+str(current_epoch)
             checkpoint_path = save_path / checkpoint_name
             
-            if len(last_CAR_scores) == num_checkpoints: # enough last checkpoints stored
-                oldest_score = last_CAR_scores[0]
+            if len(last_val_loss_scores) == num_checkpoints: # enough last checkpoints stored
+                oldest_score = last_val_loss_scores[0]
                 oldest_checkpoint_path = save_path/(oldest_score[2])
 
-            last_CAR_scores.append((current_epoch,c_accuracy,checkpoint_name))
+            
 
-            avg_loss_train = sum(loss_buffer) / len(loss_buffer)
-            print(f"Average loss: {avg_loss}")
-            stat_history.append((current_epoch,checkpoint_name,avg_loss_train,c_accuracy,w_accuracy))
+            trn_loss_avg = sum(trn_loss_buffer) / len(trn_loss_buffer)
+            val_loss_avg = sum(val_loss_buffer) / len(val_loss_buffer)
+            last_val_loss_scores.append((current_epoch,val_loss_avg,checkpoint_name))
+            print(f"Training loss: {trn_loss_avg} | Validation Loss: {val_loss_avg}")
+            stat_history.append((current_epoch,checkpoint_name,
+                                trn_loss_avg,max(trn_loss_buffer),min(trn_loss_buffer),
+                                val_loss_avg,max(val_loss_buffer),min(val_loss_buffer),
+                                c_accuracy,w_accuracy))
             
             if not checkpoint_path.exists(): # save checkpoint
                 os.makedirs(checkpoint_path)
@@ -218,15 +252,16 @@ def train_model(
             if oldest_checkpoint_path.exists():
                 shutil.rmtree(oldest_checkpoint_path)
 
-            if early_stop_check(last_CAR_scores,config.early_stop_threshold): # early stopping
-                save_last_scores(last_CAR_scores,save_path)
-                save_stat_history(stat_history,save_path)
+            save_last_scores(last_val_loss_scores,save_path)
+            save_stat_history(stat_history,save_path)
+
+            if early_stop_check(last_val_loss_scores,config.early_stop_threshold,config.num_checkpoints): # early stopping
                 print('early stopping criterion satisfied')
                 return
     
     # TODO delete checkpoints?
     print('Training finished!')
-    save_last_scores(last_CAR_scores,save_path)
+    save_last_scores(last_val_loss_scores,save_path)
     save_stat_history(stat_history,save_path)
         
 
