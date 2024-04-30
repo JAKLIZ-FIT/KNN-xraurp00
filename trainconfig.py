@@ -59,7 +59,7 @@ def load_config(args):
         pre_config['config_path'] = str(args.config_path)
         pre_config['start_epoch'] = 0
         pre_config['best_epoch'] = 0
-        pre_config['learning_rate'] = 5e-5 # TODO as argument?
+        pre_config['learning_rate'] = 1e-3# 5e-5 # TODO as argument?
 
 
     # load last scores (also get last model checkpoint)
@@ -91,7 +91,7 @@ def load_config(args):
 
 
     #stat_history_json = load_stat_history_json(Path(pre_config['save_path']))
-    stat_history = load_stat_history(Path(pre_config['save_path']))
+    stat_history, stat_names = load_stat_history(Path(pre_config['save_path']))
 
     return TrainConfig(
         model=Path(pre_config['model']),

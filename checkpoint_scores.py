@@ -62,6 +62,7 @@ def load_stat_history(save_path : Path):
     scores_path = save_path / "stat_history.txt"
     d = deque()
     is_first = True
+    first_line = None
     if not scores_path.exists():
         print('\nNo history found\n')
     else:
@@ -69,11 +70,12 @@ def load_stat_history(save_path : Path):
             for line in f.readlines():
                 if is_first:
                     is_first=False
+                    #first_line = json.loads(line)
                     continue
                 #data = line.split()
                 #d.append((int(data[0]), data[1], float(data[2]), float(data[3]), float(data[4])))
                 d.append(json.loads(line))
-    return d
+    return d, first_line
 
 def load_stat_history_json(save_path : Path):
     scores_path = save_path / "stat_history.json"
