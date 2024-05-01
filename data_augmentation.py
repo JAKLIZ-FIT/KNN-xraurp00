@@ -27,7 +27,7 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
        :param augmentation_function (callable): function to augment images
        :param n (int): number of images to augment
        """
-    counter = 0
+    broken_images = []
     with lmdb.open(source_path) as source_db, lmdb.open(target_path,
                                                         map_size=source_db.info()['map_size']) as target_db:
         with source_db.begin() as source_tx, target_db.begin(write=True) as target_tx:
@@ -54,7 +54,7 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
                     augmented_images = augmentation_function(key, image, label, random_image, random_label)
                 except (cv2.error, Exception) as e:
                     sys.stderr.write(f'{e}\n')
-                    counter += 1
+                    broken_images.append(key)
                     continue
 
                 for img in augmented_images:
@@ -70,8 +70,11 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
             label_file.close()
             output_labels.close()
     
-    if counter:
-        sys.stderr.write(f'Number of failed augmentations: {counter}!')
+    if broken_images:
+        sys.stderr.write(f'Number of failed augmentations: {len(broken_images)}!')
+        sys.stderr.write(f'Broken images:\n')
+        for image in broken_images:
+            sys.stderr.write(f'{image}\n')
 
 def augment_images(key: str, image_bytes: bytes, label: str, other_image_bytes: bytes, other_label: str):
     augmented_images = []
