@@ -3,7 +3,11 @@
 from evaluate import load
 
 import pandas as pd
-df= pd.read_csv('models/base_stage1_augmented_trn/validation_experiment_aug/confidences_val_aug.csv',index_col=0)
+#save_path = 'models/base_stage1_augmented_trn/validation_experiment_aug/'
+save_path = 'models/base_stage1_augmented_trn/train_set_eval_experiment_aug/'
+#load_filename = 'confidences_val_aug'
+load_filename = 'confidences_trn_aug'
+df= pd.read_csv(save_path+load_filename+'.csv',index_col=0)
 #print(df)
 #print(len(df['references'].unique()))
 df['filenames_short'] = df.filenames.apply(lambda x: x[:19])
@@ -15,6 +19,14 @@ unique_filenames = df["filenames_short"].unique()
 unique_GT = df["references"].unique()
 unique_augments = df["filenames_end"].unique()
 
+print(f"number of samples in the whole set{df.shape[0]}")
+df_augmented_only = df.loc[df['filenames_end'] != '.jpg']
+aux = df_augmented_only["filenames_end"].unique()
+print(f"selecting augmented files: {aux}")
+
+#print(df_augmented_only.head())
+
+"""
 for i, file in enumerate(unique_filenames):
     GT = unique_GT[i]
     print("processing file: "+file+', GT='+GT)
@@ -49,4 +61,21 @@ for augment in unique_augments:
     cer_score = cer.compute(predictions=predictions,references=references)
 
     print(f"CER score for {augment} files: {cer_score}")
+"""
+top_size = 0.3
+#10%, 20% 30% 50% 75% a 100%
+top_sizes = [0.1,0.2,0.3,0.5,0.75,1.0]
+conf_type='Conf_mean'
+df_augmented_only = df_augmented_only.sort_values(conf_type,ascending=False)
+aug_count = df_augmented_only.shape[0]
+print(f"number of augmented samples: {aug_count}")
+
+for top_size in top_sizes:
+    i_top_size = int(top_size*100)
+    print(f"selecting top {i_top_size}% confident samples by {conf_type}")
     
+    top_count = int(aug_count * top_size)
+    df_top_conf = df_augmented_only.iloc[:top_count]
+    df_top_conf = df_top_conf[['ids','references','predictions','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min','filenames']]
+    df_top_conf.to_csv(save_path+load_filename+str(i_top_size)+'.csv')
+    print(f"number of samples={top_count}")
