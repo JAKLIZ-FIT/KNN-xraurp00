@@ -1,3 +1,6 @@
 [submodule "trocr"]
 	path = trocr
 	url = https://github.com/rsommerfeld/trocr.git
+[submodule "pero-ocr"]
+	path = pero-ocr
+	url = https://github.com/DCGM/pero-ocr.git
