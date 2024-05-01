@@ -40,7 +40,10 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
                 key, label = line.strip().split(' 0 ')
                 label_dict[key] = label
 
+            i = 0
             for key, label in label_dict.items():
+                print(f"\raugmenting {i} {key}",end="")
+                i = i+1
                 image = source_tx.get(key.encode())
 
                 # Choose a random image and its label
@@ -58,6 +61,7 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
 
                 output_labels.write(f'{key} 0 {label}\n')
                 target_tx.put(key=key.encode(), value=image)
+            print("\n")
 
             label_file.close()
             output_labels.close()
@@ -111,7 +115,11 @@ def augment_images(key: str, image_bytes: bytes, label: str, other_image_bytes: 
     scale_factor = np.random.uniform(0.5, 1.5)  # Random scale factor between 0.5 and 1.5
     new_width = int(image.shape[1] * scale_factor)
     new_height = image.shape[0]  # Maintain original height
-    augmented_image_resize = cv2.resize(image, (new_width, new_height))
+    augmented_image_resize = image
+    if new_width >= 1:
+        augmented_image_resize = cv2.resize(image, (new_width, new_height))
+    else:
+        print(f"\nresizing {key}: original w={image.shape[1]} new w={new_width}\n")
 
     # Apply Gaussian square augmentation
     size = np.random.randint(1, min(41, min(image.shape[0], image.shape[1])))
