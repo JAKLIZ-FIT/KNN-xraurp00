@@ -9,6 +9,7 @@ import lmdb
 import random
 from PIL import Image
 from tqdm import tqdm
+import sys
 
 
 @dataclass
@@ -27,6 +28,7 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
        :param augmentation_function (callable): function to augment images
        :param n (int): number of images to augment
        """
+    counter = 0
     with lmdb.open(source_path) as source_db, lmdb.open(target_path,
                                                         map_size=source_db.info()['map_size']) as target_db:
         with source_db.begin() as source_tx, target_db.begin(write=True) as target_tx:
@@ -37,7 +39,10 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
 
             # Store labels in a dictionary for easy random selection
             for line in label_file:
-                key, label = line.strip().split(' 0 ')
+                try:
+                    key, label = line.strip().split(' 0 ')
+                except ValueError:  # handle unannotated img
+                    key, label = line.strip(), ''
                 label_dict[key] = label
 
             for key, label in label_dict.items():
@@ -46,8 +51,12 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
                 # Choose a random image and its label
                 random_key, random_label = random.choice(list(label_dict.items()))
                 random_image = source_tx.get(random_key.encode())
-
-                augmented_images = augmentation_function(key, image, label, random_image, random_label)
+                try:
+                    augmented_images = augmentation_function(key, image, label, random_image, random_label)
+                except cv2.error as e:
+                    sys.stderr.write(f'{e}\n')
+                    counter += 1
+                    continue
 
                 for img in augmented_images:
                     target_tx.put(
@@ -61,6 +70,9 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
 
             label_file.close()
             output_labels.close()
+    
+    if counter:
+        sys.stderr.write(f'Number of failed augmentations: {counter}!')
 
 
 
