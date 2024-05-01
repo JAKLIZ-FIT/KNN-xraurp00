@@ -48,4 +48,4 @@ label_all_df['sep'] = 0
 label_all_df = label_all_df[['file_name','sep','text']]
 print(label_all_df.shape[0])
 
-label_all_df.to_csv(save_path+"lines.unlabeled", sep=" ", header=None)
+label_all_df.to_csv(save_path+"lines.unlabeled", sep=" ", header=None, index=None)
