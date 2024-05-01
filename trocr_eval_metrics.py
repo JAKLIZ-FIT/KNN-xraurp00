@@ -128,13 +128,15 @@ def predict(
 
             char_probs_list.append(char_probs)
             #print(type(char_probs),end="\t")
-            #print(char_probs.dim(),end="\t")
-            #print(char_probs.size(dim=0),end="\t")
-            #print(char_probs.size(dim=1))
+            print(f"Batch {i} ",end="")
+            print(char_probs.dim(),end="\t")
+            print(char_probs.size(dim=0),end="\t")
+            print(char_probs.size(dim=1))
             #confidence_scores.extend(zip(ids, batch_confidence_scores))
             confidence_scores.extend(zip(ids, batch_confidence_scores[0], batch_confidence_scores[1], batch_confidence_scores[2], batch_confidence_scores[3],batch_confidence_scores[4]))
             #print(generated_text)
             #print(confidence_scores)
+
             
     #char_probs = torch.cat(char_probs_list)
     #rint(type(char_probs))
@@ -226,19 +228,21 @@ def validate(
 
 
     results_df = pd.DataFrame(confidences, columns =['ids','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min'])
-    print(results_df.head())
+    #print(results_df.head())
     #results_df['ids'] = ids
     results_df['references'] = references
     results_df['predictions'] = predictionsList
     results_df['filenames'] = filenames
-    print(results_df.columns)
+    #print(results_df.columns)
     results_df = results_df[['ids','references','predictions','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min','filenames']]
-    print(results_df)
-    print(results_df.sort_values('ids'))
-
+    #print(results_df)
+    results_df.sort_values('ids', inplace=True)
+    #print(results_df)
+    if not save_path.exists():
+        os.makedirs(save_path)
     results_df.to_csv(save_path/'confidences_val_aug.csv')
-    print(car_score)
-    print(war_score)
+    print(f"CAR = {car_score}, WAR = {war_score}")
+    print(f"")
     return car_score,war_score
 
 def get_confidence_scores(generated_ids, save_path:Path) -> list[float]:
@@ -265,11 +269,11 @@ a
 
     #print(logits)
     logits = torch.stack(list(logits),dim=1)
-    print(type(logits),end="\t")
-    print(logits.dim(),end="\t")
-    print(logits.size(dim=0),end="\t")
-    print(logits.size(dim=1),end="\t")
-    print(logits.size(dim=2),end="\t")
+    #print(type(logits),end="\t")
+    #print(logits.dim(),end="\t")
+    #print(logits.size(dim=0),end="\t")
+    #print(logits.size(dim=1),end="\t")
+    #print(logits.size(dim=2),end="\t")
 
     #if not save_path.exists():
     #    os.makedirs(save_path)
@@ -279,11 +283,11 @@ a
     # Transform logits to softmax and keep only the highest
     # (chosen) p for each token
     logit_probs = F.softmax(logits, dim=2)
-    print(type(logit_probs),end="\t")
-    print(logit_probs.dim(),end="\t")
-    print(logit_probs.size(dim=0),end="\t")
-    print(logit_probs.size(dim=1),end="\t")
-    print(logit_probs.size(dim=2))
+    #print(type(logit_probs),end="\t")
+    #print(logit_probs.dim(),end="\t")
+    #print(logit_probs.size(dim=0),end="\t")
+    #print(logit_probs.size(dim=1),end="\t")
+    #print(logit_probs.size(dim=2))
     char_probs = logit_probs.max(dim=2)[0]
     char_probs_for_mean = torch.clone(char_probs)
     char_probs_clean = torch.clone(char_probs)
