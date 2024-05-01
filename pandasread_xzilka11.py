@@ -48,29 +48,35 @@ df_augmented_only = df_augmented_only.sort_values(conf_type,ascending=False)
 aug_count = df_augmented_only.shape[0]
 print(f"number of augmented samples: {aug_count}")
 
+df_original_only_copy = df_original_only.copy()
+df_original_only_copy['sep'] = 0
+df_original_only_copy = df_original_only_copy[['filenames','sep','references']]
+df_original_only_copy.rename(columns={0: "filenames", 1: 'sep' ,2: "predictions"}, inplace=True)
+# predictions just to match column name later
+
 for top_size in top_sizes:
     i_top_size = int(top_size*100)
     print(f"selecting top {i_top_size}% confident samples by {conf_type}")
     
+    
+    top_count = int(aug_count * top_size)
+    print(f"number of samples={top_count}")
+    df_top_conf = df_augmented_only.iloc[:top_count]
+    
     if generate_partial_csv:
-        top_count = int(aug_count * top_size)
-        df_top_conf = df_augmented_only.iloc[:top_count]
         df_top_conf.to_csv(save_path+load_filename+str(i_top_size)+'.csv')
         
     # label file with only the newly selected
+    df_top_conf['sep'] = 0
+    df_top_conf = df_top_conf[['filenames','sep','predictions']]
     if generate_label_file_only_new:
-        df_top_conf_only_new = df_top_conf.copy()
-        df_top_conf_only_new['sep'] = 0
-        df_top_conf_only_new = df_top_conf_only_new[['filenames','sep','references']]
-        df_top_conf_only_new.to_csv(save_path+lines_new+str(i_top_size)+'.trn')
+        df_top_conf.to_csv(save_path+lines_new+str(i_top_size)+'.trn')
         
     # label file with original + newly selected
     if generate_label_file_with_orig:
         df_top_plus_orig = pd.concat([df_original_only,df_top_conf])
-        df_top_plus_orig['sep'] = 0
-        df_top_plus_orig = df_top_plus_orig[['filenames','sep','references']]
         df_top_plus_orig.to_csv(save_path+lines_new+str(i_top_size)+'.trn')
-        print(f"number of samples={top_count}")
+    
 
 
 # compute CER scores for augmentations
