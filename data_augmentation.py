@@ -11,7 +11,6 @@ from PIL import Image
 from tqdm import tqdm
 import sys
 
-
 @dataclass
 class AugmentedImage:
     image: bytes
@@ -53,7 +52,7 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
                 random_image = source_tx.get(random_key.encode())
                 try:
                     augmented_images = augmentation_function(key, image, label, random_image, random_label)
-                except cv2.error as e:
+                except (cv2.error, Exception) as e:
                     sys.stderr.write(f'{e}\n')
                     counter += 1
                     continue
@@ -73,10 +72,6 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
     
     if counter:
         sys.stderr.write(f'Number of failed augmentations: {counter}!')
-
-
-
-
 
 def augment_images(key: str, image_bytes: bytes, label: str, other_image_bytes: bytes, other_label: str):
     augmented_images = []
