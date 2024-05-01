@@ -78,7 +78,7 @@ class MetricsEvaluator:
         """
         cn = []
         for prediction in predictions:
-            add_hypothese(cn, prediction, 1)
+            cn = add_hypothese(cn, prediction, 1)
         confusion = np.prod(list(map(len, cn)))
         return 1.0 / confusion
     
@@ -119,7 +119,10 @@ class MetricsEvaluator:
                 predictions=predictions
             )
     
-    def eval_metric(self, confidence_type: str) -> (list[float], float):
+    def eval_metric(
+        self,
+        confidence_type: str
+    ) -> (list[float], list[float], float):
         """
         Evaluates how well given confidence type corespondes to the CER.
         CER corespondence is computed as
@@ -127,6 +130,7 @@ class MetricsEvaluator:
         -> Smaller area under curve means better result! <-
         :param confidence_type (str): name of confidence field to evaluate
         :returns (list[float], float): tuple(
+            confidences,
             CER corespondence,
             area under the curve for given metric
         )
@@ -134,6 +138,8 @@ class MetricsEvaluator:
         # get confidence and cer
         conf_cer = []
         for file_name, data in self.dataset.items():
+            if data['augmented']:
+                continue
             conf_cer.append((data[confidence_type], data['cer']))
         
         # sort from highest confidence to lowest
@@ -152,7 +158,7 @@ class MetricsEvaluator:
         # calculate area under curve
         auc = np.trapz(cer_vals)
 
-        return cer_vals, auc
+        return [x[0] for x in conf_cer], cer_vals, auc
 
     def save_metrics_to_file(
         self,
@@ -169,8 +175,9 @@ class MetricsEvaluator:
         file = open(file, 'w')
 
         for ct in confidence_types:
-            vals, area = self.eval_metric(confidence_type=ct)
+            conf, vals, area = self.eval_metric(confidence_type=ct)
             results[ct] = {
+                'conf': conf,
                 'vals': vals,
                 'auc': area
             }
