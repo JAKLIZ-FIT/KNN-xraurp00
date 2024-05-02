@@ -12,6 +12,7 @@ from tqdm import tqdm
 import sys
 import multiprocessing
 from queue import Empty
+import time
 
 @dataclass
 class AugmentedImage:
@@ -170,48 +171,87 @@ def augment_ds(source_path: str, target_path: str, labels_path: str, output_labe
        :param augmentation_function (callable): function to augment images
        :param n (int): number of images to augment
        """
+    finished = 0
     broken_images = []
-    with lmdb.open(source_path) as source_db, lmdb.open(target_path,
-                                                        map_size=source_db.info()['map_size']) as target_db:
-        with source_db.begin() as source_tx, target_db.begin(write=True) as target_tx:
-            label_file = open(labels_path, 'r')
-            output_labels = open(output_labels, 'w')
+    source_db = lmdb.open(source_path)
+    target_db = lmdb.open(target_path, create=True)
+    source_tx = source_db.begin()
+    #target_tx = target_db.begin(write=True)
+    
+    label_file = open(labels_path, 'r')
+    output_labels = open(output_labels, 'w')
 
-            label_dict = {}
+    label_dict = {}
 
-            # Store labels in a dictionary for easy random selection
-            for line in label_file:
+    # Store labels in a dictionary for easy random selection
+    for line in label_file:
+        try:
+            key, label = line.strip().split(' 0 ')
+        except ValueError:  # handle unannotated img
+            key, label = line.strip(), ''
+        label_dict[key] = label
+    timestamp = time.time()
+    try:
+        for key, label in label_dict.items():
+            image = source_tx.get(key.encode())
+
+            # Choose a random image and its label
+            random_key, random_label = random.choice(list(label_dict.items()))
+            random_image = source_tx.get(random_key.encode())
+            try:
+                augmented_images = augmentation_function(key, image, label, random_image, random_label)
+            except (cv2.error, Exception) as e:
+                sys.stderr.write(f'{e}\n')
+                broken_images.append(key)
+                continue
+
+            for img in augmented_images:
+                target_tx = target_db.begin(write=True)
                 try:
-                    key, label = line.strip().split(' 0 ')
-                except ValueError:  # handle unannotated img
-                    key, label = line.strip(), ''
-                label_dict[key] = label
-
-            for key, label in label_dict.items():
-                image = source_tx.get(key.encode())
-
-                # Choose a random image and its label
-                random_key, random_label = random.choice(list(label_dict.items()))
-                random_image = source_tx.get(random_key.encode())
-                try:
-                    augmented_images = augmentation_function(key, image, label, random_image, random_label)
-                except (cv2.error, Exception) as e:
-                    sys.stderr.write(f'{e}\n')
-                    broken_images.append(key)
-                    continue
-
-                for img in augmented_images:
                     target_tx.put(
                         key=img.name.encode(),
                         value=img.image
                     )
-                    output_labels.write(f'{img.name} 0 {img.label}\n')
+                    target_tx.commit()
+                except lmdb.MapFullError:
+                    target_tx.abort()
+                    ms = target_db.info()['map_size']
+                    print(f'Resizing map from {ms} to {ms * 2}')
+                    target_db.set_mapsize(ms * 2)
+                    target_tx = target_db.begin(write=True)
+                    target_tx.put(
+                        key=img.name.encode(),
+                        value=img.image
+                    )
+                    target_tx.commit()
+                output_labels.write(f'{img.name} 0 {img.label}\n')
 
-                output_labels.write(f'{key} 0 {label}\n')
+            target_tx = target_db.begin(write=True)
+            try:
                 target_tx.put(key=key.encode(), value=image)
+                target_tx.commit()
+            except lmdb.MapFullError:
+                target_tx.abort()
+                ms = target_db.info()['map_size']
+                print(f'Resizing map from {ms} to {ms * 2}')
+                target_db.set_mapsize(ms * 2)
+                target_tx = target_db.begin(write=True)
+                target_tx.put(key=key.encode(), value=image)
+                target_tx.commit()
+            output_labels.write(f'{key} 0 {label}\n')
 
-            label_file.close()
-            output_labels.close()
+            finished += 1
+            if finished % 1000 == 0:
+                now = time.time()
+                print(f'Number of finished tasks: {finished}')
+                print(f'Time since last report: {now - timestamp}s')
+                timestamp = now
+    except:
+        sys.stderr.write(f'Last key: {key}\n')
+        raise
+
+    label_file.close()
+    output_labels.close()
     
     if broken_images:
         sys.stderr.write(f'Number of failed augmentations: {len(broken_images)}!')
