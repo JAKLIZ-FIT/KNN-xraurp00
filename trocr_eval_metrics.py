@@ -254,23 +254,26 @@ def validate(
     ids = [id for id, prediction in predictions]
     filenames = [context.val_dataset.get_path(id) for id, prediction in predictions]
 
-    cer = load("cer")
-    cer_score = cer.compute(predictions=predictionsList,references=references)
-    car_score = 1 - cer_score
+    #cer = load("cer")
+    #cer_score = cer.compute(predictions=predictionsList,references=references)
+    #car_score = 1 - cer_score
+    car_score =0
     
-    wer = load('wer')
-    wer_score = wer.compute(predictions=predictionsList,references=references)
-    war_score = 1 - wer_score
+    #wer = load('wer')
+    #wer_score = wer.compute(predictions=predictionsList,references=references)
+    #war_score = 1 - wer_score
+    war_score =0
 
-
-    results_df = pd.DataFrame(confidences, columns =['ids','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min'])
+    #results_df = pd.DataFrame(confidences, columns =['ids','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min'])
+    results_df = pd.DataFrame(confidences, columns =['ids','Conf_product', 'Conf_mean'])
     #print(results_df.head())
     #results_df['ids'] = ids
-    results_df['references'] = references
+    #results_df['references'] = references
     results_df['predictions'] = predictionsList
     results_df['filenames'] = filenames
     #print(results_df.columns)
-    results_df = results_df[['ids','references','predictions','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min','filenames']]
+    results_df = results_df[['ids','predictions','Conf_product','Conf_mean','filenames']]
+    #results_df = results_df[['ids','references','predictions','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min','filenames']]
     #print(results_df)
     results_df.sort_values('ids', inplace=True)
     #print(results_df)
