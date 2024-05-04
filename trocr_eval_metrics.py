@@ -21,6 +21,9 @@ import datetime
 import pickle
 import pandas as pd
 
+COMPUTE_CER_WER = False
+SAVE_CHAR_PROBS = True
+
 def load_context(
     model_path: Path,
     train_ds_path: Path,
@@ -79,7 +82,8 @@ def predict(
     model: VisionEncoderDecoderModel,
     dataloader: DataLoader,
     device: torch.device,
-    save_path: Path
+    save_path: Path,
+    context: Context
 ) -> tuple[list[tuple[int, str]], list[float]]:
     """
     Predict labels of given dataset.
@@ -116,12 +120,13 @@ def predict(
         print(f"checkpoint found: {last_line}")
     else:
         print("no checkpoint found")
+        with open(checkpoint_path, 'w') as f:
+            f.write(",ids,references,predictions,Conf_product,Conf_sum,Conf_max,Conf_mean,Conf_min,filenames\n")
     last_i=-1
-    open_type  = 'w'
+    open_type  = 'a'
     if last_line != None:
-        last_id,last_i,pred,conf = last_line.strip().split(',')
-        open_type  = 'a'
-    last_i = int(last_i)
+        last_i = last_line.strip().split(',')[-1]
+        last_i = int(last_i)
 
     char_probs_list: list[torch.Tensor] = []
     with open(checkpoint_path, open_type) as cf:
@@ -145,6 +150,7 @@ def predict(
                     generated_ids.sequences,
                     skip_special_tokens=True
                 )
+                #print(generated_text)
 
                 ids = [t.item() for t in batch["idx"]]
                 output.extend(zip(ids, generated_text))
@@ -154,22 +160,27 @@ def predict(
                     generated_ids=generated_ids, save_path=save_path
                 )
 
-                #char_probs_list.append(char_probs)
-                #print(type(char_probs),end="\t")
-                #print(f"Batch {i} ",end="")
-                #print(char_probs.dim(),end="\t")
-                #print(char_probs.size(dim=0),end="\t")
-                #print(char_probs.size(dim=1))
+                if SAVE_CHAR_PROBS:
+                    char_probs_list.append(char_probs)
                 
                 #confidence_scores.extend(zip(ids, batch_confidence_scores))
                 confidence_scores.extend(zip(ids, batch_confidence_scores[0], batch_confidence_scores[1], batch_confidence_scores[2], batch_confidence_scores[3],batch_confidence_scores[4]))
-                
-                #print(generated_text)
                 #print(confidence_scores)
+                
+                filenames = [context.val_dataset.get_path(id) for id, prediction in output]
+                references = [context.val_dataset.get_label(id) for id, prediction in output]  
+                
+                #line numbering for compatible format
+                line_ids = range(i*context.batch_size,(i+1)*context.batch_size)
+    
                 batch_nums = [i for _ in range(len(ids))]
-                checkpoint_data = zip(ids, batch_nums, generated_text, batch_confidence_scores[3])
-                for ids,batch_num,text, conf in checkpoint_data:
-                    cf.write(f"{ids},{batch_num},{text},{conf}\n")
+                checkpoint_data = zip(line_ids, ids, references, generated_text,\
+                                batch_confidence_scores[0], batch_confidence_scores[1],\
+                                batch_confidence_scores[2], batch_confidence_scores[3],\
+                                batch_confidence_scores[4],filenames, batch_nums)
+                for c in checkpoint_data:
+                    cf.write(','.join(c))
+                    cf.write("\n")
 
                 print(f"\rFinished Batch {i}",end="")
             
@@ -237,7 +248,8 @@ def validate(
         model=context.model,
         dataloader=context.val_dataloader,
         device=device,
-        save_path=save_path
+        save_path=save_path,
+        context=context
 
     )
     if len(predictions) == 0:
@@ -254,29 +266,23 @@ def validate(
     ids = [id for id, prediction in predictions]
     filenames = [context.val_dataset.get_path(id) for id, prediction in predictions]
 
-    #cer = load("cer")
-    #cer_score = cer.compute(predictions=predictionsList,references=references)
-    #car_score = 1 - cer_score
     car_score =0
-    
-    #wer = load('wer')
-    #wer_score = wer.compute(predictions=predictionsList,references=references)
-    #war_score = 1 - wer_score
     war_score =0
-
-    #results_df = pd.DataFrame(confidences, columns =['ids','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min'])
-    results_df = pd.DataFrame(confidences, columns =['ids','Conf_product', 'Conf_mean'])
-    #print(results_df.head())
-    #results_df['ids'] = ids
-    #results_df['references'] = references
+    if COMPUTE_CER_WER:
+        cer = load("cer")
+        cer_score = cer.compute(predictions=predictionsList,references=references)
+        car_score = 1 - cer_score
+    
+        wer = load('wer')
+        wer_score = wer.compute(predictions=predictionsList,references=references)
+        war_score = 1 - wer_score
+    
+    results_df = pd.DataFrame(confidences, columns =['ids','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min'])
+    results_df['references'] = references
     results_df['predictions'] = predictionsList
     results_df['filenames'] = filenames
-    #print(results_df.columns)
-    results_df = results_df[['ids','predictions','Conf_product','Conf_mean','filenames']]
-    #results_df = results_df[['ids','references','predictions','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min','filenames']]
-    #print(results_df)
+    results_df = results_df[['ids','references','predictions','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min','filenames']]
     results_df.sort_values('ids', inplace=True)
-    #print(results_df)
     if not save_path.exists():
         os.makedirs(save_path)
     results_df.to_csv(save_path/'confidences_val_aug.csv')
@@ -292,49 +298,21 @@ def get_confidence_scores(generated_ids, save_path:Path) -> list[float]:
     Code provided by Romeo Sommerfeld
     taken from https://github.com/rsommerfeld/trocr
     file src/scripts.py
-a
+
     :param generated_ids: generated predictions
     :returns: list of confidence scores
     """
     # Get raw logits, with shape (examples,tokens,token_vals)
     logits = generated_ids.scores
-    #print("logit tensor dimensions=",end="") 
-    #aux = [logitsa.dim() for logitsa in logits]
-    #print(len(aux))
-    #print(aux)
-    #aux2 = [(logitsa.size(dim=0),logitsa.size(dim=0)) for logitsa in logits]
-    #print(len(aux2))
-    #print(aux2)
-
-    #print(logits)
     logits = torch.stack(list(logits),dim=1)
-    #print(type(logits),end="\t")
-    #print(logits.dim(),end="\t")
-    #print(logits.size(dim=0),end="\t")
-    #print(logits.size(dim=1),end="\t")
-    #print(logits.size(dim=2),end="\t")
-
-    #if not save_path.exists():
-    #    os.makedirs(save_path)
-    #torch.save(logits,save_path/"logits.pt")
     
-
     # Transform logits to softmax and keep only the highest
     # (chosen) p for each token
     logit_probs = F.softmax(logits, dim=2)
-    #print(type(logit_probs),end="\t")
-    #print(logit_probs.dim(),end="\t")
-    #print(logit_probs.size(dim=0),end="\t")
-    #print(logit_probs.size(dim=1),end="\t")
-    #print(logit_probs.size(dim=2))
     char_probs = logit_probs.max(dim=2)[0]
     char_probs_for_mean = torch.clone(char_probs)
     char_probs_clean = torch.clone(char_probs)
 
-    #if not save_path.exists():
-    #    os.makedirs(save_path)
-    #torch.save(char_probs,save_path/"char_probs.pt")
-    
     # Only tokens of val>2 should influence the confidence.
     # Thus, set probabilities to 1 for tokens 0-2
     #mask = generated_ids.sequences[:,:-1] > 2 # original implementation
@@ -350,18 +328,7 @@ a
     batch_confidence_scores_mean = torch.div(batch_confidence_scores_sum,valid_char_count)
     batch_confidence_scores_max = torch.max(char_probs_for_mean,dim=1)[0]
     batch_confidence_scores_min = torch.min(char_probs_for_mean,dim=1)[0]
-    #print("cumprod")
-    #print(batch_confidence_scores_prod)
-    #print("cumsum")
-    #print(batch_confidence_scores_mean)
-    #batch_confidence_scores_mean = torch.div(batch_confidence_scores_mean,valid_char_count)
-    #print("mean")
-    #print(batch_confidence_scores_mean)
-    #print("max:")
-    #print(batch_confidence_scores_max)
-    #print("min:")
-    #print(batch_confidence_scores_min)
-    # TODO change return
+    
     return [[v.item() for v in batch_confidence_scores_prod], \
            [v.item() for v in batch_confidence_scores_sum],\
            [v.item() for v in batch_confidence_scores_max],\
@@ -430,8 +397,8 @@ def main():
     # TODO add logits and save logits
     accuracy = validate(context=context, device=device, save_path=args.save_path)
     # save results
-    if not args.save_path.exists():
-        os.makedirs(args.save_path)
+    #if not args.save_path.exists():
+    #    os.makedirs(args.save_path)
     # TODO save logits to file?
     return 0
 
