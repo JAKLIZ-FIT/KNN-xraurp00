@@ -9,7 +9,10 @@ import lmdb
 import random
 from PIL import Image
 from tqdm import tqdm
-
+import sys
+import multiprocessing
+from queue import Empty
+import time
 
 @dataclass
 class AugmentedImage:
@@ -17,58 +20,244 @@ class AugmentedImage:
     label: str
     name: str
 
+def mp_worker(input_queue, output_queue, source_tx, target_tx, label_dict, augmentation_function):
+    """
+    Multiprocessing task function for worker.
+    :param input_queue: queue where to get input data from
+    :param output_queue: queue where to send resutls
+    :param source_tx: source transaction for source image database
+    :param target_tx: transaction of the output database
+    :param label_dict: dict with data for mixup
+    :param augmentation_function: funcion for agumenting images
+    """
+    while True:
+        input_data = input_queue.get()
+        # stop condition
+        if input_data is None:
+            break
+        
+        # unpack task
+        key, label = input_data
+        # get key, label for mixup
+        random_key, random_label = random.choice(list(label_dict.items()))
+        # get images
+        random_image = source_tx.get(random_key.encode())
+        image = source_tx.get(key.encode())
+
+        try:
+            augmented_images = augmentation_function(key, image, label, random_image, random_label)
+        except (cv2.error, Exception) as e:
+            # inform parent process about broken img
+            output_queue.put((key, label, False))
+            continue
+
+        # write images to DB and send labels to main process
+        for img in augmented_images:
+            target_tx.put(
+                key=img.name.encode(),
+                value=img.image
+            )
+            output_queue.put((f'{img.name}', f'{img.label}', True))
+        # write original images and send original labels
+        target_tx.put(key=key.encode(), value=image)
+        output_queue.put((f'{key}', '{label}\n', True))
+
+def augment_parallel(
+    source_path: str,
+    target_path: str,
+    labels_path: str,
+    output_labels: str,
+    augmentation_function=lambda key,image, label, random_image, random_label: augment_images(key, image, label, random_image, random_label),
+    n: int = 0
+):
+    """
+    Augmentates dataset.
+    :param source_path (str): path leading to source lmdb file
+    :param target_path (str): path leading to output lmdb file
+    :param augmentation_function (callable): function to augment images
+    :param n (int): number of images to augment
+    """
+    label_file = open(labels_path, 'r')
+    output_labels = open(output_labels, 'w')
+
+    finished_tasks = 0
+    label_dict = {}
+    broken_images = []
+
+    # Store labels in a dictionary for easy random selection
+    for line in label_file:
+        try:
+            key, label = line.strip().split(' 0 ')
+        except ValueError:  # handle unannotated img
+            key, label = line.strip(), ''
+        label_dict[key] = label
+    
+    source_db = lmdb.open(source_path)
+    target_db = lmdb.open(target_path, map_size=source_db.info()['map_size'])
+    n_processes = int(multiprocessing.cpu_count() / 2)
+    process_pool = []
+    input_queue = multiprocessing.Queue(maxsize=1000)
+    output_queue = multiprocessing.Queue()
+    
+    for _ in range(n_processes):
+        process = multiprocessing.Process(
+            target=mp_worker,
+            args=(input_queue, output_queue, source_db.begin(), target_db.begin(write=True), label_dict, augmentation_function)
+        )
+        process.start()
+        process_pool.append(process)
+    
+    for key, label in label_dict.items():
+        input_queue.put((key, label))
+        """
+        input_queue.put(None)
+        mp_worker(
+            input_queue=input_queue,
+            output_queue=output_queue,
+            source_tx=source_db.begin(),
+            target_tx=target_db.begin(write=True),
+            label_dict=label_dict,
+            augmentation_function=augmentation_function
+        )
+        """
+        while True:
+            try:
+                output = output_queue.get(block=False)
+            except Empty:
+                break
+            if output[-1]:
+                output_labels.write(f'{output[0]} 0 {output[1]}\n')
+            else:
+                broken_images.append(output[0])
+            finished_tasks += 1
+            if finished_tasks % 1000 == 0:
+                print(f'Completed augmentations: {finished_tasks}')
+        
+    print('finishing')
+    for _ in range(n_processes):
+        input_queue.put(None)
+    
+    for process in process_pool:
+        process.join()
+    
+    # empty the otuput queue
+    while True:
+        try:
+            output = output_queue.get(block=False)
+        except Empty:
+            break
+        if output[-1]:
+            output_labels.write(f'{output[0]} 0 {output[1]}\n')
+        else:
+            broken_images.append(output[0])
+        finished_tasks += 1
+        if finished_tasks % 1000 == 0:
+            print(f'Completed augmentations: {finished_tasks}')
+
+    if broken_images:
+        sys.stderr.write('List of broken images that can\'t be augmented:')
+        for broken_image in broken_images:
+            sys.stderr.write(f'{broken_image}\n')
+
+    label_file.close()
+    output_labels.close()
 
 def augment_ds(source_path: str, target_path: str, labels_path: str, output_labels: str,
                augmentation_function=lambda key, image, label, random_image, random_label: augment_images(key, image, label, random_image, random_label), n: int = 0):
     """
-       Augmentates dataset.
-       :param source_path (str): path leading to source lmdb file
-       :param target_path (str): path leading to output lmdb file
-       :param augmentation_function (callable): function to augment images
-       :param n (int): number of images to augment
-       """
-    with lmdb.open(source_path) as source_db, lmdb.open(target_path,
-                                                        map_size=source_db.info()['map_size']) as target_db:
-        with source_db.begin() as source_tx, target_db.begin(write=True) as target_tx:
-            label_file = open(labels_path, 'r')
-            output_labels = open(output_labels, 'w')
+    Augmentates dataset.
+    :param source_path (str): path leading to source lmdb file
+    :param target_path (str): path leading to output lmdb file
+    :param augmentation_function (callable): function to augment images
+    :param n (int): number of images to augment
+    """
+    finished = 0
+    broken_images = []
+    source_db = lmdb.open(source_path)
+    target_db = lmdb.open(target_path, create=True)
+    source_tx = source_db.begin()
+    #target_tx = target_db.begin(write=True)
+    
+    label_file = open(labels_path, 'r')
+    output_labels = open(output_labels, 'w')
 
-            label_dict = {}
+    label_dict = {}
 
-            # Store labels in a dictionary for easy random selection
-            for line in label_file:
-                key, label = line.strip().split(' 0 ')
-                label_dict[key] = label
+    # Store labels in a dictionary for easy random selection
+    for line in label_file:
+        try:
+            key, label = line.strip().split(' 0 ')
+        except ValueError:  # handle unannotated img
+            key, label = line.strip(), ''
+        label_dict[key] = label
+    timestamp = time.time()
+    try:
+        for key, label in label_dict.items():
+            image = source_tx.get(key.encode())
 
-            i = 0
-            for key, label in label_dict.items():
-                print(f"\raugmenting {i} {key}",end="")
-                i = i+1
-                image = source_tx.get(key.encode())
-
-                # Choose a random image and its label
-                random_key, random_label = random.choice(list(label_dict.items()))
-                random_image = source_tx.get(random_key.encode())
-
+            # Choose a random image and its label
+            random_key, random_label = random.choice(list(label_dict.items()))
+            random_image = source_tx.get(random_key.encode())
+            try:
                 augmented_images = augmentation_function(key, image, label, random_image, random_label)
+            except (cv2.error, Exception) as e:
+                sys.stderr.write(f'{e}\n')
+                broken_images.append(key)
+                continue
 
-                for img in augmented_images:
+            for img in augmented_images:
+                target_tx = target_db.begin(write=True)
+                try:
                     target_tx.put(
                         key=img.name.encode(),
                         value=img.image
                     )
-                    output_labels.write(f'{img.name} 0 {img.label}\n')
+                    target_tx.commit()
+                except lmdb.MapFullError:
+                    target_tx.abort()
+                    ms = target_db.info()['map_size']
+                    print(f'Resizing map from {ms} to {ms * 2}')
+                    target_db.set_mapsize(ms * 2)
+                    target_tx = target_db.begin(write=True)
+                    target_tx.put(
+                        key=img.name.encode(),
+                        value=img.image
+                    )
+                    target_tx.commit()
+                output_labels.write(f'{img.name} 0 {img.label}\n')
 
-                output_labels.write(f'{key} 0 {label}\n')
+            target_tx = target_db.begin(write=True)
+            try:
                 target_tx.put(key=key.encode(), value=image)
-            print("\n")
+                target_tx.commit()
+            except lmdb.MapFullError:
+                target_tx.abort()
+                ms = target_db.info()['map_size']
+                print(f'Resizing map from {ms} to {ms * 2}')
+                target_db.set_mapsize(ms * 2)
+                target_tx = target_db.begin(write=True)
+                target_tx.put(key=key.encode(), value=image)
+                target_tx.commit()
+            output_labels.write(f'{key} 0 {label}\n')
 
-            label_file.close()
-            output_labels.close()
+            finished += 1
+            if finished % 1000 == 0:
+                now = time.time()
+                print(f'Number of finished tasks: {finished}')
+                print(f'Time since last report: {now - timestamp}s')
+                timestamp = now
+    except:
+        sys.stderr.write(f'Last key: {key}\n')
+        raise
 
-
-
-
+    label_file.close()
+    output_labels.close()
+    
+    if broken_images:
+        sys.stderr.write(f'Number of failed augmentations: {len(broken_images)}!')
+        sys.stderr.write(f'Broken images:\n')
+        for image in broken_images:
+            sys.stderr.write(f'{image}\n')
 
 def augment_images(key: str, image_bytes: bytes, label: str, other_image_bytes: bytes, other_label: str):
     augmented_images = []
