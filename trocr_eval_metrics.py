@@ -124,11 +124,11 @@ def predict(
     else:
         print("no checkpoint found")
         with open(checkpoint_path, 'w') as f:
-            f.write(",ids,references,predictions,Conf_product,Conf_sum,Conf_max,Conf_mean,Conf_min,filenames,batch_num\n")
+            f.write("\\ids\\references\\predictions\\Conf_product\\Conf_sum\\Conf_max\\Conf_mean\\Conf_min\\filenames\\batch_num\n")
     last_i=-1
     open_type  = 'a'
     if last_line != None:
-        last_i = last_line.strip().split(',')[-1]
+        last_i = last_line.strip().split('\\')[-1]
         try:
             last_i = int(last_i)
         except:
@@ -187,7 +187,7 @@ def predict(
                                 batch_confidence_scores[2], batch_confidence_scores[3],\
                                 batch_confidence_scores[4],filenames, batch_nums)
                 for c in checkpoint_data:
-                    cf.write(f'{c[0]},{c[1]},{c[2]},{c[3]},{c[4]},{c[5]},{c[6]},{c[7]},{c[8]},{c[9]},{c[10]}\n')
+                    cf.write(f'{c[0]}\\{c[1]}\\{c[2]}\\{c[3]}\\{c[4]}\\{c[5]}\\{c[6]}\\{c[7]}\\{c[8]}\\{c[9]}\\{c[10]}\n')
 
                 print(f"\rFinished Batch {i}",end="")
     print('\n')
@@ -304,7 +304,7 @@ def validate(
         results_df.sort_values('ids', inplace=True)
         if not save_path.exists():
             os.makedirs(save_path)
-        results_df.to_csv(save_path/'confidences_val_aug.csv')
+        results_df.to_csv(save_path/'confidences_val_aug.csv',sep='\\')
         
     return car_score,war_score
 
