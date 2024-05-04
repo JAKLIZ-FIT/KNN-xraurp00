@@ -23,6 +23,7 @@ import pandas as pd
 
 COMPUTE_CER_WER = False
 SAVE_CHAR_PROBS = True
+CREATE_OUTPUT_DF = False # create a dataframe of all data at the end
 
 def load_context(
     model_path: Path,
@@ -158,7 +159,8 @@ def predict(
                 #print(generated_text)
 
                 ids = [t.item() for t in batch["idx"]]
-                output.extend(zip(ids, generated_text))
+                if CREATE_OUTPUT_DF or COMPUTE_CER_WER:
+                    output.extend(zip(ids, generated_text))
 
                 # Compute confidence scores
                 batch_confidence_scores, char_probs = get_confidence_scores(
@@ -168,9 +170,10 @@ def predict(
                 if SAVE_CHAR_PROBS:
                     char_probs_list.append(char_probs)
                 
-                #confidence_scores.extend(zip(ids, batch_confidence_scores))
-                confidence_scores.extend(zip(ids, batch_confidence_scores[0], batch_confidence_scores[1], batch_confidence_scores[2], batch_confidence_scores[3],batch_confidence_scores[4]))
-                #print(confidence_scores)
+                if CREATE_OUTPUT_DF or COMPUTE_CER_WER:
+                    #confidence_scores.extend(zip(ids, batch_confidence_scores))
+                    confidence_scores.extend(zip(ids, batch_confidence_scores[0], batch_confidence_scores[1], batch_confidence_scores[2], batch_confidence_scores[3],batch_confidence_scores[4]))
+                    #print(confidence_scores)
                 
                 filenames = [context.val_dataset.get_path(id) for id in ids]
                 references = [context.val_dataset.get_label(id) for id in ids]  
@@ -275,19 +278,19 @@ def validate(
     car_score =0
     war_score =0
     
-    #if COMPUTE_CER_WER:
-    #    cer = load("cer")
-    #    cer_score = cer.compute(predictions=predictionsList,references=references)
-    #    car_score = 1 - cer_score
-    # 
-    #    wer = load('wer')
-    #    wer_score = wer.compute(predictions=predictionsList,references=references)
-    #    war_score = 1 - wer_score
-    #    print(f"CAR = {car_score}, WAR = {war_score}")
-    #    print(f"")
+    if COMPUTE_CER_WER:
+        cer = load("cer")
+        cer_score = cer.compute(predictions=predictionsList,references=references)
+        car_score = 1 - cer_score
+     
+        wer = load('wer')
+        wer_score = wer.compute(predictions=predictionsList,references=references)
+        war_score = 1 - wer_score
+        print(f"CAR = {car_score}, WAR = {war_score}")
+        print(f"")
 
-    create_output_df = False
-    if create_output_df:
+    
+    if CREATE_OUTPUT_DF:
         ids = [id for id, prediction in predictions]
         filenames = [context.val_dataset.get_path(id) for id, prediction in predictions]
 
@@ -408,10 +411,11 @@ def main():
 
     # TODO add confusion network
     # TODO add logits and save logits
+    if not args.save_path.exists():
+        os.makedirs(args.save_path,exist_ok=True)
     accuracy = validate(context=context, device=device, save_path=args.save_path, batch_size=args.batch_size)
     # save results
-    #if not args.save_path.exists():
-    #    os.makedirs(args.save_path)
+    #
     # TODO save logits to file?
     return 0
 
