@@ -22,7 +22,7 @@ import pickle
 import pandas as pd
 
 COMPUTE_CER_WER = False
-SAVE_CHAR_PROBS = True
+SAVE_CHAR_PROBS = False
 CREATE_OUTPUT_DF = False # create a dataframe of all data at the end
 
 def load_context(
@@ -104,7 +104,8 @@ def predict(
 
     output: list[tuple[int, str]] = []
     confidence_scores: list[tuple[int, float]] = []
-
+    char_probs_list: list[torch.Tensor] = []
+    
     checkpoint_path = save_path/'checkpoint.csv'
     last_line = None
     if not save_path.exists():
@@ -134,7 +135,6 @@ def predict(
             last_i = -1 
             print("only header was present in the checkpoint file")
 
-    char_probs_list: list[torch.Tensor] = []
     with open(checkpoint_path, open_type) as cf:
         with torch.no_grad():
             model.eval()
@@ -272,6 +272,8 @@ def validate(
     # TODO plot results
     # TODO integrate (area under curve) to get the best confidence metric
     
+    # TODO load these data from the checkpoint file
+
     references = [context.val_dataset.get_label(id) for id, prediction in predictions]    
     predictionsList = [prediction for id, prediction in predictions]
     
