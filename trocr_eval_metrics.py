@@ -172,8 +172,8 @@ def predict(
                 confidence_scores.extend(zip(ids, batch_confidence_scores[0], batch_confidence_scores[1], batch_confidence_scores[2], batch_confidence_scores[3],batch_confidence_scores[4]))
                 #print(confidence_scores)
                 
-                filenames = [context.val_dataset.get_path(id) for id, prediction in output]
-                references = [context.val_dataset.get_label(id) for id, prediction in output]  
+                filenames = [context.val_dataset.get_path(id) for id in ids]
+                references = [context.val_dataset.get_label(id) for id in ids]  
                 
                 #line numbering for compatible format
                 line_ids = range(i*batch_size,(i+1)*batch_size)
@@ -187,17 +187,19 @@ def predict(
                     cf.write(f'{c[0]},{c[1]},{c[2]},{c[3]},{c[4]},{c[5]},{c[6]},{c[7]},{c[8]},{c[9]},{c[10]}\n')
 
                 print(f"\rFinished Batch {i}",end="")
-            
-    #char_probs = torch.cat(char_probs_list)
-    #rint(type(char_probs))
-    #print(char_probs.dim())
-    #print(char_probs.size(dim=0),end=" ")
-    #print(char_probs.size(dim=1))
-
-    #if not save_path.exists():
-    #    os.makedirs(save_path)
-    #torch.save(char_probs,save_path/"char_probs.pt")
     print('\n')
+    
+    if SAVE_CHAR_PROBS:      
+        char_probs = torch.cat(char_probs_list)
+        #print(type(char_probs))
+        #print(char_probs.dim())
+        #print(char_probs.size(dim=0),end=" ")
+        #print(char_probs.size(dim=1))
+
+        if not save_path.exists():
+            os.makedirs(save_path)
+        torch.save(char_probs,save_path/"char_probs.pt")
+    
     return output, confidence_scores
 
 def validate(
@@ -269,31 +271,36 @@ def validate(
     
     references = [context.val_dataset.get_label(id) for id, prediction in predictions]    
     predictionsList = [prediction for id, prediction in predictions]
-    ids = [id for id, prediction in predictions]
-    filenames = [context.val_dataset.get_path(id) for id, prediction in predictions]
-
+    
     car_score =0
     war_score =0
-    if COMPUTE_CER_WER:
-        cer = load("cer")
-        cer_score = cer.compute(predictions=predictionsList,references=references)
-        car_score = 1 - cer_score
     
-        wer = load('wer')
-        wer_score = wer.compute(predictions=predictionsList,references=references)
-        war_score = 1 - wer_score
-    
-    results_df = pd.DataFrame(confidences, columns =['ids','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min'])
-    results_df['references'] = references
-    results_df['predictions'] = predictionsList
-    results_df['filenames'] = filenames
-    results_df = results_df[['ids','references','predictions','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min','filenames']]
-    results_df.sort_values('ids', inplace=True)
-    if not save_path.exists():
-        os.makedirs(save_path)
-    results_df.to_csv(save_path/'confidences_val_aug.csv')
-    print(f"CAR = {car_score}, WAR = {war_score}")
-    print(f"")
+    #if COMPUTE_CER_WER:
+    #    cer = load("cer")
+    #    cer_score = cer.compute(predictions=predictionsList,references=references)
+    #    car_score = 1 - cer_score
+    # 
+    #    wer = load('wer')
+    #    wer_score = wer.compute(predictions=predictionsList,references=references)
+    #    war_score = 1 - wer_score
+    #    print(f"CAR = {car_score}, WAR = {war_score}")
+    #    print(f"")
+
+    create_output_df = False
+    if create_output_df:
+        ids = [id for id, prediction in predictions]
+        filenames = [context.val_dataset.get_path(id) for id, prediction in predictions]
+
+        results_df = pd.DataFrame(confidences, columns =['ids','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min'])
+        results_df['references'] = references
+        results_df['predictions'] = predictionsList
+        results_df['filenames'] = filenames
+        results_df = results_df[['ids','references','predictions','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min','filenames']]
+        results_df.sort_values('ids', inplace=True)
+        if not save_path.exists():
+            os.makedirs(save_path)
+        results_df.to_csv(save_path/'confidences_val_aug.csv')
+        
     return car_score,war_score
 
 def get_confidence_scores(generated_ids, save_path:Path) -> list[float]:
