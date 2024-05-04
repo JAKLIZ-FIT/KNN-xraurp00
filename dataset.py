@@ -28,6 +28,8 @@ class LMDBDataset(Dataset):
 
         #self.labels = load_labels(label_file)
         label_df = pd.read_csv(label_file, sep=" 0 ", header=None, engine='python')
+        if label_df.shape[1] == 1:
+            label_df['text'] = 'X'
         label_df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
         self.labels = label_df
         self.image_database = lmdb.open(str(lmdb_database))
