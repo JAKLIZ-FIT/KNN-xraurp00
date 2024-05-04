@@ -21,6 +21,10 @@ import datetime
 import pickle
 import pandas as pd
 
+COMPUTE_CER_WER = False
+SAVE_CHAR_PROBS = False
+CREATE_OUTPUT_DF = False # create a dataframe of all data at the end
+
 def load_context(
     model_path: Path,
     train_ds_path: Path,
@@ -79,7 +83,9 @@ def predict(
     model: VisionEncoderDecoderModel,
     dataloader: DataLoader,
     device: torch.device,
-    save_path: Path
+    save_path: Path,
+    context: Context,
+    batch_size: int
 ) -> tuple[list[tuple[int, str]], list[float]]:
     """
     Predict labels of given dataset.
@@ -98,53 +104,104 @@ def predict(
 
     output: list[tuple[int, str]] = []
     confidence_scores: list[tuple[int, float]] = []
-
-
     char_probs_list: list[torch.Tensor] = []
+    
+    checkpoint_path = save_path/'checkpoint.csv'
+    last_line = None
+    if not save_path.exists():
+        os.makedirs(save_path)
+    if checkpoint_path.exists():
+        #https://stackoverflow.com/questions/46258499/how-to-read-the-last-line-of-a-file-in-python
+        with open(checkpoint_path, 'rb') as f:
+            try:  # catch OSError in case of a one line file 
+                f.seek(-2, os.SEEK_END)
+                while f.read(1) != b'\n':
+                    f.seek(-2, os.SEEK_CUR)
+            except OSError:
+                f.seek(0)
+            last_line = f.readline().decode()
+        print(f"checkpoint found: {last_line}")
+    else:
+        print("no checkpoint found")
+        with open(checkpoint_path, 'w') as f:
+            f.write("\\ids\\references\\predictions\\Conf_product\\Conf_sum\\Conf_max\\Conf_mean\\Conf_min\\filenames\\batch_num\n")
+    last_i=-1
+    open_type  = 'a'
+    if last_line != None:
+        last_i = last_line.strip().split('\\')[-1]
+        try:
+            last_i = int(last_i)
+        except:
+            last_i = -1 
+            print("only header was present in the checkpoint file")
 
-    with torch.no_grad():
-        model.eval()
-        for i, batch in enumerate(dataloader):
-            inputs: torch.Tensor = batch["input"].to(device)
+    with open(checkpoint_path, open_type) as cf:
+        with torch.no_grad():
+            model.eval()
+            for i, batch in enumerate(dataloader):
+                if i <= last_i:
+                    print(f"\rskipping batch {i}",end="")
+                    if i == last_i:
+                        print('\n')
+                    continue
+                inputs: torch.Tensor = batch["input"].to(device)
 
-            generated_ids = model.generate(
-                inputs=inputs,
-                return_dict_in_generate=True,
-                output_scores = True,
-                max_length = 40
-            )
-            generated_text = processor.batch_decode(
-                generated_ids.sequences,
-                skip_special_tokens=True
-            )
+                generated_ids = model.generate(
+                    inputs=inputs,
+                    return_dict_in_generate=True,
+                    output_scores = True,
+                    max_length = 40
+                )
+                generated_text = processor.batch_decode(
+                    generated_ids.sequences,
+                    skip_special_tokens=True
+                )
+                #print(generated_text)
 
-            ids = [t.item() for t in batch["idx"]]
-            output.extend(zip(ids, generated_text))
+                ids = [t.item() for t in batch["idx"]]
+                if CREATE_OUTPUT_DF or COMPUTE_CER_WER:
+                    output.extend(zip(ids, generated_text))
 
-            # Compute confidence scores
-            batch_confidence_scores, char_probs = get_confidence_scores(
-                generated_ids=generated_ids, save_path=save_path
-            )
+                # Compute confidence scores
+                batch_confidence_scores, char_probs = get_confidence_scores(
+                    generated_ids=generated_ids, save_path=save_path
+                )
 
-            char_probs_list.append(char_probs)
-            #print(type(char_probs),end="\t")
-            #print(char_probs.dim(),end="\t")
-            #print(char_probs.size(dim=0),end="\t")
-            #print(char_probs.size(dim=1))
-            #confidence_scores.extend(zip(ids, batch_confidence_scores))
-            confidence_scores.extend(zip(ids, batch_confidence_scores[0], batch_confidence_scores[1], batch_confidence_scores[2], batch_confidence_scores[3],batch_confidence_scores[4]))
-            #print(generated_text)
-            #print(confidence_scores)
-            
-    #char_probs = torch.cat(char_probs_list)
-    #rint(type(char_probs))
-    #print(char_probs.dim())
-    #print(char_probs.size(dim=0),end=" ")
-    #print(char_probs.size(dim=1))
+                if SAVE_CHAR_PROBS:
+                    char_probs_list.append(char_probs)
+                
+                if CREATE_OUTPUT_DF or COMPUTE_CER_WER:
+                    #confidence_scores.extend(zip(ids, batch_confidence_scores))
+                    confidence_scores.extend(zip(ids, batch_confidence_scores[0], batch_confidence_scores[1], batch_confidence_scores[2], batch_confidence_scores[3],batch_confidence_scores[4]))
+                    #print(confidence_scores)
+                
+                filenames = [context.val_dataset.get_path(id) for id in ids]
+                references = [context.val_dataset.get_label(id) for id in ids]  
+                
+                #line numbering for compatible format
+                line_ids = range(i*batch_size,(i+1)*batch_size)
+    
+                batch_nums = [i for _ in range(len(ids))]
+                checkpoint_data = zip(line_ids, ids, references, generated_text,\
+                                batch_confidence_scores[0], batch_confidence_scores[1],\
+                                batch_confidence_scores[2], batch_confidence_scores[3],\
+                                batch_confidence_scores[4],filenames, batch_nums)
+                for c in checkpoint_data:
+                    cf.write(f'{c[0]}\\{c[1]}\\{c[2]}\\{c[3]}\\{c[4]}\\{c[5]}\\{c[6]}\\{c[7]}\\{c[8]}\\{c[9]}\\{c[10]}\n')
 
-    #if not save_path.exists():
-    #    os.makedirs(save_path)
-    #torch.save(char_probs,save_path/"char_probs.pt")
+                print(f"\rFinished Batch {i}",end="")
+    print('\n')
+    
+    if SAVE_CHAR_PROBS:      
+        char_probs = torch.cat(char_probs_list)
+        #print(type(char_probs))
+        #print(char_probs.dim())
+        #print(char_probs.size(dim=0),end=" ")
+        #print(char_probs.size(dim=1))
+
+        if not save_path.exists():
+            os.makedirs(save_path)
+        torch.save(char_probs,save_path/"char_probs.pt")
     
     return output, confidence_scores
 
@@ -152,6 +209,7 @@ def validate(
     context: Context,
     device: torch.device,
     save_path: Path,
+    batch_size: int,
     print_wrong: bool = False
 ) -> float:
     """
@@ -200,10 +258,13 @@ def validate(
         model=context.model,
         dataloader=context.val_dataloader,
         device=device,
-        save_path=save_path
+        save_path=save_path,
+        context=context,
+        batch_size=batch_size
 
     )
-    
+    if len(predictions) == 0:
+        return -1,-1
     assert len(predictions) > 0
 
     # TODO save CER and Confidence together for selection of data to add to trainDS
@@ -211,34 +272,40 @@ def validate(
     # TODO plot results
     # TODO integrate (area under curve) to get the best confidence metric
     
+    # TODO load these data from the checkpoint file
+
     references = [context.val_dataset.get_label(id) for id, prediction in predictions]    
     predictionsList = [prediction for id, prediction in predictions]
-    ids = [id for id, prediction in predictions]
-    filenames = [context.val_dataset.get_path(id) for id, prediction in predictions]
-
-    cer = load("cer")
-    cer_score = cer.compute(predictions=predictionsList,references=references)
-    car_score = 1 - cer_score
     
-    wer = load('wer')
-    wer_score = wer.compute(predictions=predictionsList,references=references)
-    war_score = 1 - wer_score
+    car_score =0
+    war_score =0
+    
+    if COMPUTE_CER_WER:
+        cer = load("cer")
+        cer_score = cer.compute(predictions=predictionsList,references=references)
+        car_score = 1 - cer_score
+     
+        wer = load('wer')
+        wer_score = wer.compute(predictions=predictionsList,references=references)
+        war_score = 1 - wer_score
+        print(f"CAR = {car_score}, WAR = {war_score}")
+        print(f"")
 
+    
+    if CREATE_OUTPUT_DF:
+        ids = [id for id, prediction in predictions]
+        filenames = [context.val_dataset.get_path(id) for id, prediction in predictions]
 
-    results_df = pd.DataFrame(confidences, columns =['ids','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min'])
-    print(results_df.head())
-    #results_df['ids'] = ids
-    results_df['references'] = references
-    results_df['predictions'] = predictionsList
-    results_df['filenames'] = filenames
-    print(results_df.columns)
-    results_df = results_df[['ids','references','predictions','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min','filenames']]
-    print(results_df)
-    print(results_df.sort_values('ids'))
-
-    results_df.to_csv(save_path/'confidences_val_aug.csv')
-    print(car_score)
-    print(war_score)
+        results_df = pd.DataFrame(confidences, columns =['ids','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min'])
+        results_df['references'] = references
+        results_df['predictions'] = predictionsList
+        results_df['filenames'] = filenames
+        results_df = results_df[['ids','references','predictions','Conf_product', 'Conf_sum', 'Conf_max', 'Conf_mean', 'Conf_min','filenames']]
+        results_df.sort_values('ids', inplace=True)
+        if not save_path.exists():
+            os.makedirs(save_path)
+        results_df.to_csv(save_path/'confidences_val_aug.csv',sep='\\')
+        
     return car_score,war_score
 
 def get_confidence_scores(generated_ids, save_path:Path) -> list[float]:
@@ -249,49 +316,21 @@ def get_confidence_scores(generated_ids, save_path:Path) -> list[float]:
     Code provided by Romeo Sommerfeld
     taken from https://github.com/rsommerfeld/trocr
     file src/scripts.py
-a
+
     :param generated_ids: generated predictions
     :returns: list of confidence scores
     """
     # Get raw logits, with shape (examples,tokens,token_vals)
     logits = generated_ids.scores
-    #print("logit tensor dimensions=",end="") 
-    #aux = [logitsa.dim() for logitsa in logits]
-    #print(len(aux))
-    #print(aux)
-    #aux2 = [(logitsa.size(dim=0),logitsa.size(dim=0)) for logitsa in logits]
-    #print(len(aux2))
-    #print(aux2)
-
-    #print(logits)
     logits = torch.stack(list(logits),dim=1)
-    print(type(logits),end="\t")
-    print(logits.dim(),end="\t")
-    print(logits.size(dim=0),end="\t")
-    print(logits.size(dim=1),end="\t")
-    print(logits.size(dim=2),end="\t")
-
-    #if not save_path.exists():
-    #    os.makedirs(save_path)
-    #torch.save(logits,save_path/"logits.pt")
     
-
     # Transform logits to softmax and keep only the highest
     # (chosen) p for each token
     logit_probs = F.softmax(logits, dim=2)
-    print(type(logit_probs),end="\t")
-    print(logit_probs.dim(),end="\t")
-    print(logit_probs.size(dim=0),end="\t")
-    print(logit_probs.size(dim=1),end="\t")
-    print(logit_probs.size(dim=2))
     char_probs = logit_probs.max(dim=2)[0]
     char_probs_for_mean = torch.clone(char_probs)
     char_probs_clean = torch.clone(char_probs)
 
-    #if not save_path.exists():
-    #    os.makedirs(save_path)
-    #torch.save(char_probs,save_path/"char_probs.pt")
-    
     # Only tokens of val>2 should influence the confidence.
     # Thus, set probabilities to 1 for tokens 0-2
     #mask = generated_ids.sequences[:,:-1] > 2 # original implementation
@@ -307,18 +346,7 @@ a
     batch_confidence_scores_mean = torch.div(batch_confidence_scores_sum,valid_char_count)
     batch_confidence_scores_max = torch.max(char_probs_for_mean,dim=1)[0]
     batch_confidence_scores_min = torch.min(char_probs_for_mean,dim=1)[0]
-    #print("cumprod")
-    #print(batch_confidence_scores_prod)
-    #print("cumsum")
-    #print(batch_confidence_scores_mean)
-    #batch_confidence_scores_mean = torch.div(batch_confidence_scores_mean,valid_char_count)
-    #print("mean")
-    #print(batch_confidence_scores_mean)
-    #print("max:")
-    #print(batch_confidence_scores_max)
-    #print("min:")
-    #print(batch_confidence_scores_min)
-    # TODO change return
+    
     return [[v.item() for v in batch_confidence_scores_prod], \
            [v.item() for v in batch_confidence_scores_sum],\
            [v.item() for v in batch_confidence_scores_max],\
@@ -385,10 +413,11 @@ def main():
 
     # TODO add confusion network
     # TODO add logits and save logits
-    accuracy = validate(context=context, device=device, save_path=args.save_path)
-    # save results
     if not args.save_path.exists():
-        os.makedirs(args.save_path)
+        os.makedirs(args.save_path,exist_ok=True)
+    accuracy = validate(context=context, device=device, save_path=args.save_path, batch_size=args.batch_size)
+    # save results
+    #
     # TODO save logits to file?
     return 0
 

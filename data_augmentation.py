@@ -165,12 +165,12 @@ def augment_parallel(
 def augment_ds(source_path: str, target_path: str, labels_path: str, output_labels: str,
                augmentation_function=lambda key, image, label, random_image, random_label: augment_images(key, image, label, random_image, random_label), n: int = 0):
     """
-       Augmentates dataset.
-       :param source_path (str): path leading to source lmdb file
-       :param target_path (str): path leading to output lmdb file
-       :param augmentation_function (callable): function to augment images
-       :param n (int): number of images to augment
-       """
+    Augmentates dataset.
+    :param source_path (str): path leading to source lmdb file
+    :param target_path (str): path leading to output lmdb file
+    :param augmentation_function (callable): function to augment images
+    :param n (int): number of images to augment
+    """
     finished = 0
     broken_images = []
     source_db = lmdb.open(source_path)
@@ -304,7 +304,11 @@ def augment_images(key: str, image_bytes: bytes, label: str, other_image_bytes: 
     scale_factor = np.random.uniform(0.5, 1.5)  # Random scale factor between 0.5 and 1.5
     new_width = int(image.shape[1] * scale_factor)
     new_height = image.shape[0]  # Maintain original height
-    augmented_image_resize = cv2.resize(image, (new_width, new_height))
+    augmented_image_resize = image
+    if new_width >= 1:
+        augmented_image_resize = cv2.resize(image, (new_width, new_height))
+    else:
+        print(f"\nresizing {key}: original w={image.shape[1]} new w={new_width}\n")
 
     # Apply Gaussian square augmentation
     size = np.random.randint(1, min(41, min(image.shape[0], image.shape[1])))
