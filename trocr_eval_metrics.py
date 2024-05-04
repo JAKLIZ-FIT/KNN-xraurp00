@@ -83,7 +83,8 @@ def predict(
     dataloader: DataLoader,
     device: torch.device,
     save_path: Path,
-    context: Context
+    context: Context,
+    batch_size: int
 ) -> tuple[list[tuple[int, str]], list[float]]:
     """
     Predict labels of given dataset.
@@ -106,7 +107,7 @@ def predict(
     checkpoint_path = save_path/'checkpoint.csv'
     last_line = None
     if not save_path.exists():
-        os.makedirs(checkpoint_path)
+        os.makedirs(save_path)
     if checkpoint_path.exists():
         #https://stackoverflow.com/questions/46258499/how-to-read-the-last-line-of-a-file-in-python
         with open(checkpoint_path, 'rb') as f:
@@ -121,12 +122,16 @@ def predict(
     else:
         print("no checkpoint found")
         with open(checkpoint_path, 'w') as f:
-            f.write(",ids,references,predictions,Conf_product,Conf_sum,Conf_max,Conf_mean,Conf_min,filenames\n")
+            f.write(",ids,references,predictions,Conf_product,Conf_sum,Conf_max,Conf_mean,Conf_min,filenames,batch_num\n")
     last_i=-1
     open_type  = 'a'
     if last_line != None:
         last_i = last_line.strip().split(',')[-1]
-        last_i = int(last_i)
+        try:
+            last_i = int(last_i)
+        except:
+            last_i = -1 
+            print("only header was present in the checkpoint file")
 
     char_probs_list: list[torch.Tensor] = []
     with open(checkpoint_path, open_type) as cf:
@@ -171,7 +176,7 @@ def predict(
                 references = [context.val_dataset.get_label(id) for id, prediction in output]  
                 
                 #line numbering for compatible format
-                line_ids = range(i*context.batch_size,(i+1)*context.batch_size)
+                line_ids = range(i*batch_size,(i+1)*batch_size)
     
                 batch_nums = [i for _ in range(len(ids))]
                 checkpoint_data = zip(line_ids, ids, references, generated_text,\
@@ -179,8 +184,7 @@ def predict(
                                 batch_confidence_scores[2], batch_confidence_scores[3],\
                                 batch_confidence_scores[4],filenames, batch_nums)
                 for c in checkpoint_data:
-                    cf.write(','.join(c))
-                    cf.write("\n")
+                    cf.write(f'{c[0]},{c[1]},{c[2]},{c[3]},{c[4]},{c[5]},{c[6]},{c[7]},{c[8]},{c[9]},{c[10]}\n')
 
                 print(f"\rFinished Batch {i}",end="")
             
@@ -200,6 +204,7 @@ def validate(
     context: Context,
     device: torch.device,
     save_path: Path,
+    batch_size: int,
     print_wrong: bool = False
 ) -> float:
     """
@@ -249,7 +254,8 @@ def validate(
         dataloader=context.val_dataloader,
         device=device,
         save_path=save_path,
-        context=context
+        context=context,
+        batch_size=batch_size
 
     )
     if len(predictions) == 0:
@@ -395,7 +401,7 @@ def main():
 
     # TODO add confusion network
     # TODO add logits and save logits
-    accuracy = validate(context=context, device=device, save_path=args.save_path)
+    accuracy = validate(context=context, device=device, save_path=args.save_path, batch_size=args.batch_size)
     # save results
     #if not args.save_path.exists():
     #    os.makedirs(args.save_path)
