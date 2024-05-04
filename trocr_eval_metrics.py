@@ -99,44 +99,79 @@ def predict(
     output: list[tuple[int, str]] = []
     confidence_scores: list[tuple[int, float]] = []
 
+    checkpoint_path = save_path/'checkpoint.csv'
+    last_line = None
+    if not save_path.exists():
+        os.makedirs(checkpoint_path)
+    if checkpoint_path.exists():
+        #https://stackoverflow.com/questions/46258499/how-to-read-the-last-line-of-a-file-in-python
+        with open(checkpoint_path, 'rb') as f:
+            try:  # catch OSError in case of a one line file 
+                f.seek(-2, os.SEEK_END)
+                while f.read(1) != b'\n':
+                    f.seek(-2, os.SEEK_CUR)
+            except OSError:
+                f.seek(0)
+            last_line = f.readline().decode()
+        print(f"checkpoint found: {last_line}")
+    else:
+        print("no checkpoint found")
+    last_i=-1
+    open_type  = 'w'
+    if last_line != None:
+        last_id,last_i,pred,conf = last_line.strip().split(',')
+        open_type  = 'a'
+    last_i = int(last_i)
 
     char_probs_list: list[torch.Tensor] = []
+    with open(checkpoint_path, open_type) as cf:
+        with torch.no_grad():
+            model.eval()
+            for i, batch in enumerate(dataloader):
+                if i <= last_i:
+                    print(f"\rskipping batch {i}",end="")
+                    if i == last_i:
+                        print('\n')
+                    continue
+                inputs: torch.Tensor = batch["input"].to(device)
 
-    with torch.no_grad():
-        model.eval()
-        for i, batch in enumerate(dataloader):
-            inputs: torch.Tensor = batch["input"].to(device)
+                generated_ids = model.generate(
+                    inputs=inputs,
+                    return_dict_in_generate=True,
+                    output_scores = True,
+                    max_length = 40
+                )
+                generated_text = processor.batch_decode(
+                    generated_ids.sequences,
+                    skip_special_tokens=True
+                )
 
-            generated_ids = model.generate(
-                inputs=inputs,
-                return_dict_in_generate=True,
-                output_scores = True,
-                max_length = 40
-            )
-            generated_text = processor.batch_decode(
-                generated_ids.sequences,
-                skip_special_tokens=True
-            )
+                ids = [t.item() for t in batch["idx"]]
+                output.extend(zip(ids, generated_text))
 
-            ids = [t.item() for t in batch["idx"]]
-            output.extend(zip(ids, generated_text))
+                # Compute confidence scores
+                batch_confidence_scores, char_probs = get_confidence_scores(
+                    generated_ids=generated_ids, save_path=save_path
+                )
 
-            # Compute confidence scores
-            batch_confidence_scores, char_probs = get_confidence_scores(
-                generated_ids=generated_ids, save_path=save_path
-            )
+                #char_probs_list.append(char_probs)
+                #print(type(char_probs),end="\t")
+                #print(f"Batch {i} ",end="")
+                #print(char_probs.dim(),end="\t")
+                #print(char_probs.size(dim=0),end="\t")
+                #print(char_probs.size(dim=1))
+                
+                #confidence_scores.extend(zip(ids, batch_confidence_scores))
+                confidence_scores.extend(zip(ids, batch_confidence_scores[0], batch_confidence_scores[1], batch_confidence_scores[2], batch_confidence_scores[3],batch_confidence_scores[4]))
+                
+                #print(generated_text)
+                #print(confidence_scores)
+                batch_nums = [i for _ in range(len(ids))]
+                checkpoint_data = zip(ids, batch_nums, generated_text, batch_confidence_scores[3])
+                for ids,batch_num,text, conf in checkpoint_data:
+                    cf.write(f"{ids},{batch_num},{text},{conf}\n")
 
-            char_probs_list.append(char_probs)
-            #print(type(char_probs),end="\t")
-            print(f"Batch {i} ",end="")
-            print(char_probs.dim(),end="\t")
-            print(char_probs.size(dim=0),end="\t")
-            print(char_probs.size(dim=1))
-            #confidence_scores.extend(zip(ids, batch_confidence_scores))
-            confidence_scores.extend(zip(ids, batch_confidence_scores[0], batch_confidence_scores[1], batch_confidence_scores[2], batch_confidence_scores[3],batch_confidence_scores[4]))
-            #print(generated_text)
-            #print(confidence_scores)
-
+                print(f"\rFinished Batch {i}",end="")
             
     #char_probs = torch.cat(char_probs_list)
     #rint(type(char_probs))
@@ -147,7 +182,7 @@ def predict(
     #if not save_path.exists():
     #    os.makedirs(save_path)
     #torch.save(char_probs,save_path/"char_probs.pt")
-    
+    print('\n')
     return output, confidence_scores
 
 def validate(
@@ -205,7 +240,8 @@ def validate(
         save_path=save_path
 
     )
-    
+    if len(predictions) == 0:
+        return -1,-1
     assert len(predictions) > 0
 
     # TODO save CER and Confidence together for selection of data to add to trainDS
