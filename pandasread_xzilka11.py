@@ -91,7 +91,7 @@ def add_unlabeled_to_train(
         #print(unique_GT)
         print(f"number of samples in the evaluated set: {eval_df.shape[0]}")
     
-        
+        print(eval_df.dtypes)
 
     df_augmented_only = None
     df_original_only = None
@@ -132,6 +132,29 @@ def add_unlabeled_to_train(
         print(new_df.tail())
 
 
+    num_bins = 20
+    bin_len = new_df.shape[0] // num_bins
+    
+    new_df['label_len'] = new_df['predictions'].apply(lambda x: len(str(x)))
+    
+    bin_df = new_df.copy()
+    bin_df = bin_df.sort_values('label_len')
+    if debug_print:
+        print(bin_df.head())
+    bins = [bin_df.iloc[i*bin_len:(i+1)*bin_len,:] for i in range(num_bins)]
+    for aux_df in bins:
+        if debug_print:
+            print(aux_df.iloc[0,-1],end=" ")
+            print(aux_df.shape[0])
+        aux_df = aux_df.sort_values(conf_type,ascending=False) # just to be safe
+    #if debug_print:
+    max_label_len = new_df.label_len.max()
+    #print(f'{max_label_len}')
+    #print(new_df.loc[new_df['label_len'] == max_label_len])
+    #label_lengths = new_df.label_len.unique()
+    #print(list(label_lengths).sort())
+
+
     for top_size in add_amounts:
         i_top_size = int(top_size*100)
         if debug_print:
@@ -141,9 +164,15 @@ def add_unlabeled_to_train(
         
         top_count = int(new_count * top_size)
         if debug_print:
-            print(f"number of samples={top_count}")
+            print(f"number of samples={top_count}",end=" ")
         
-        df_top_conf = new_df.iloc[:top_count].copy()
+        bin_top_len = int(bin_len * top_size)
+        if debug_print:
+            print(f"Number of samples in one bin={bin_top_len}")
+        
+        #df_top_conf = new_df.iloc[:top_count].copy()
+        bin_dfs_top = [aux_df.iloc[:bin_top_len].copy() for aux_df in bins]
+        df_top_conf = pd.concat(bin_dfs_top)
         
         if generate_partial_csv:
             df_top_conf.to_csv(save_path/("lines"+str(i_top_size)+'.csv'),sep="\\") 
@@ -255,19 +284,19 @@ def parse_args():
     return parser.parse_args()
 
 def main():
-    #args = parse_args()
-    #add_unlabeled_to_train(args.eval_results, args.train_labels, args.save_path, conf_type=args.conf_type,add_amounts=[args.add_percentage])
+    args = parse_args()
+    add_unlabeled_to_train(args.eval_results, args.train_labels, args.save_path, conf_type=args.conf_type,add_amounts=[args.add_percentage])
     
 
     #10%, 20% 30% 50% 75% a 100%
     #top_sizes = [0.1, 0.2, 0.3, 0.5, 0.75, 1.0]
     
     #eval_results = Path('models/base_stage1_augmented_trn/validation_experiment_aug/confidences_val_aug.csv')
-    eval_results = Path('models/base_stage1_augmented_trn/unlabeled_experiment/checkpoint3.csv')
-    train_labels = Path('../augmented/lines_augmented.trn')
-    save_path = Path('../unlabeled_split/')
+    #eval_results = Path('models/base_stage1_augmented_trn/unlabeled_experiment/checkpoint3.csv')
+    #train_labels = Path('../augmented/lines_augmented.trn')
+    #save_path = Path('../unlabeled_split/')
     
-    add_unlabeled_to_train(eval_results, train_labels, save_path,debug_print=False)
+    #add_unlabeled_to_train(eval_results, train_labels, save_path,debug_print=True)
 
     return 0
 
