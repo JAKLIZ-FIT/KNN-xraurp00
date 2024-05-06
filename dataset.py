@@ -11,27 +11,19 @@ from transformers import TrOCRProcessor
 
 import pandas as pd
 
-def load_labels(path: Path) -> dict[str, str]:
-    labels: dict[str, str] = dict()
-    with open(path, 'r') as file:
-        for line in file:
-            if line[-1] == '\n':
-                line = line[:-1]
-            line = line.split(' ')
-            labels[line[0]] = line[2]
-    return labels
+def load_labels(path: Path) -> pd.DataFrame:
+    label_df = pd.read_csv(path, sep=" 0 ", header=None, engine='python',quotechar="\\")
+    if label_df.shape[1] == 1:
+        label_df['text'] = 'X'
+    label_df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
+    return label_df
 
 class LMDBDataset(Dataset):
     def __init__(self, lmdb_database: Path, label_file: Path, processor: TrOCRProcessor = None, word_len_padding = 8):
         if not lmdb_database.exists():
             raise OSError(f'File {lmdb_database} does not exist!')
 
-        #self.labels = load_labels(label_file)
-        label_df = pd.read_csv(label_file, sep=" 0 ", header=None, engine='python')
-        if label_df.shape[1] == 1:
-            label_df['text'] = 'X'
-        label_df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
-        self.labels = label_df
+        self.labels = load_labels(label_file)
         self.image_database = lmdb.open(str(lmdb_database))
         self.transaction = self.image_database.begin()
         self.processor = processor
