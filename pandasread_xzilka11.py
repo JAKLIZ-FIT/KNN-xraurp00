@@ -10,21 +10,22 @@ import csv
 from pathlib import Path
 import sys
 
-
-def read_labels(label_path:Path) -> pd.DataFrame:
-    return pd.read_csv(label_path, sep=" 0 ", header=None, engine='python', quotechar='\\')
-
-def save_labels(in_df : pd.DataFrame, save_path: Path):
+def prepare_df_for_label_file(in_df):
     df = in_df.copy()
     df['sep'] = 0
 
     # select only columns to be added to the label file
     if len(df.references.unique()) == 1:
-        df = df[['filenames','sep','predictions']]
-    else:
-        df = df[['filenames','sep','references']]
-    df.rename(columns={0: "filenames", 1: 'sep' ,2: "references"}, inplace=True)
+        df['references'] = df['predictions']
+    df = df[['filenames','sep','references']]
+    return df
 
+
+def read_labels(label_path:Path) -> pd.DataFrame:
+    return pd.read_csv(label_path, sep=" 0 ", header=None, engine='python', quotechar='\\')
+
+def save_labels(in_df : pd.DataFrame, save_path: Path):
+    df = prepare_df_for_label_file(in_df)
     df.to_csv(save_path,sep=" ",index=False,header=None, quotechar='\\')
 
 def add_unlabeled_to_train(
@@ -49,7 +50,8 @@ def add_unlabeled_to_train(
     """
     
     train_df = read_labels(train_labels)
-    train_df.rename(columns={0:'filenames', 1: 'text'}, inplace=True)
+    train_df.rename(columns={0:'filenames', 1: 'references'}, inplace=True)
+    train_df['predictions'] = train_df['references']
     train_files = train_df['filenames'].to_list()
     if debug_print:
         print("train_labels:")
@@ -153,6 +155,7 @@ def add_unlabeled_to_train(
 
         # label file with original + newly selected
         if generate_extended_train_set:
+            df_top_conf = prepare_df_for_label_file(df_top_conf)
             df_top_conf = pd.concat([train_df,df_top_conf])
             save_labels(df_top_conf,save_path=save_path/(new_filename+"_extended"+file_end))
         
@@ -252,19 +255,19 @@ def parse_args():
     return parser.parse_args()
 
 def main():
-    args = parse_args()
-    add_unlabeled_to_train(args.eval_results, args.train_labels, args.save_path, conf_type=args.conf_type,add_amounts=[args.add_percentage])
+    #args = parse_args()
+    #add_unlabeled_to_train(args.eval_results, args.train_labels, args.save_path, conf_type=args.conf_type,add_amounts=[args.add_percentage])
     
 
     #10%, 20% 30% 50% 75% a 100%
     #top_sizes = [0.1, 0.2, 0.3, 0.5, 0.75, 1.0]
     
     #eval_results = Path('models/base_stage1_augmented_trn/validation_experiment_aug/confidences_val_aug.csv')
-    #eval_results = Path('models/base_stage1_augmented_trn/unlabeled_experiment/checkpoint3.csv')
-    #train_labels = Path('../augmented/lines_augmented.trn')
-    #save_path = Path('../unlabeled_split/')
+    eval_results = Path('models/base_stage1_augmented_trn/unlabeled_experiment/checkpoint3.csv')
+    train_labels = Path('../augmented/lines_augmented.trn')
+    save_path = Path('../unlabeled_split/')
     
-    #add_unlabeled_to_train(eval_results, train_labels, save_path,debug_print=False)
+    add_unlabeled_to_train(eval_results, train_labels, save_path,debug_print=False)
 
     return 0
 
