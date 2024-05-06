@@ -14,8 +14,9 @@ import pandas as pd
 def load_labels(path: Path) -> pd.DataFrame:
     label_df = pd.read_csv(path, sep=" 0 ", header=None, engine='python',quotechar="\\")
     if label_df.shape[1] == 1:
-        label_df['text'] = 'X'
-    label_df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
+        label_df["text"] = 'X'
+    label_df = label_df.rename(columns={0: "file_name", 1: "text"})
+    label_df["text"] = label_df["text"].apply(lambda x: str(x).strip('\\'))
     return label_df
 
 class LMDBDataset(Dataset):
