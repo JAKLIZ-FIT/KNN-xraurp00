@@ -9,6 +9,7 @@ import numpy as np
 import csv
 from pathlib import Path
 import sys
+from dataset import load_labels
 
 def prepare_df_for_label_file(in_df):
     df = in_df.copy()
@@ -19,10 +20,6 @@ def prepare_df_for_label_file(in_df):
         df['references'] = df['predictions']
     df = df[['filenames','sep','references']]
     return df
-
-
-def read_labels(label_path:Path) -> pd.DataFrame:
-    return pd.read_csv(label_path, sep=" 0 ", header=None, engine='python', quotechar='\\')
 
 def save_labels(in_df : pd.DataFrame, save_path: Path):
     df = prepare_df_for_label_file(in_df)
@@ -49,7 +46,7 @@ def add_unlabeled_to_train(
     :param add_amounts TODO
     """
     
-    train_df = read_labels(train_labels)
+    train_df = load_labels(train_labels)
     train_df.rename(columns={0:'filenames', 1: 'references'}, inplace=True)
     train_df['predictions'] = train_df['references']
     train_files = train_df['filenames'].to_list()
@@ -117,7 +114,10 @@ def add_unlabeled_to_train(
 
     # samples not in training set
     # (subtract train_labels from eval_df)
-    new_df = eval_df.loc[~eval_df.filenames.isin(train_files)]
+    if conf_type == 'Conf_cn':
+        new_df = df_original_only.loc[~df_original_only.filenames.isin(train_files)]
+    else:
+        new_df = eval_df.loc[~eval_df.filenames.isin(train_files)]
     new_count = new_df.shape[0]
     new_df['sep'] = 0
     gt_count = len(new_df.references.unique())
@@ -173,6 +173,9 @@ def add_unlabeled_to_train(
         #df_top_conf = new_df.iloc[:top_count].copy()
         bin_dfs_top = [aux_df.iloc[:bin_top_len].copy() for aux_df in bins]
         df_top_conf = pd.concat(bin_dfs_top)
+
+        if conf_type == 'Conf_type':
+            df_top_conf = eval_df.loc[eval_df.filenames_short.isin(df_top_conf['filenames'].to_list())]
         
         if generate_partial_csv:
             df_top_conf.to_csv(save_path/("lines"+str(i_top_size)+'.csv'),sep="\\") 
