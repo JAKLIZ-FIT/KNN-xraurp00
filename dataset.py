@@ -12,11 +12,26 @@ from transformers import TrOCRProcessor
 import pandas as pd
 
 def load_labels(path: Path) -> pd.DataFrame:
-    label_df = pd.read_csv(path, sep=" 0 ", header=None, engine='python',quotechar="\\")
-    if label_df.shape[1] == 1:
-        label_df["text"] = 'X'
-    label_df = label_df.rename(columns={0: "file_name", 1: "text"})
-    label_df["text"] = label_df["text"].apply(lambda x: str(x).strip('\\'))
+    label_df = None
+    try:
+        label_df = pd.read_csv(path, sep=" 0 ", header=None, engine='python',quotechar="\\")
+        if label_df.shape[1] == 1:
+            label_df["text"] = 'X'
+        label_df = label_df.rename(columns={0: "file_name", 1: "text"})
+        label_df["text"] = label_df["text"].apply(lambda x: str(x).strip('\\'))
+    except:
+        labels = []
+        filenames = []
+        with open(path, 'r') as file:
+            for line in file:
+                line = line.rstrip('\n')
+                line = line.split(' 0 ',maxsplit=1)
+                filenames.append(line[0])
+                if len(line) == 1:
+                    labels.append('X')
+                else:
+                    labels.append(line[1].strip('\\'))
+        label_df = pd.DataFrame(data={'file_name':filenames,'text':labels})
     return label_df
 
 class LMDBDataset(Dataset):
@@ -36,7 +51,11 @@ class LMDBDataset(Dataset):
     
     def __getitem__(self, idx):
         key = self.labels.file_name[idx]
-        image = Image.open(BytesIO(self.transaction.get(key.encode()))).convert('RGB')
+        try:
+            image = Image.open(BytesIO(self.transaction.get(key.encode()))).convert('RGB')
+        except:
+            print(f"failed to load image: {key}")
+            exit(1)
         image_tensor: torch.tensor = self.processor(image, return_tensors='pt').pixel_values[0]
 
         label = self.labels.text[idx]
