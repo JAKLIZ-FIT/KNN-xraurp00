@@ -10,16 +10,16 @@ https://www.overleaf.com/7238591795nmxbwghbjgmm#18e979
 ## Training
 Script **trocr_train.py** is used for training. It requires a model, training and validation sets (each split into LMDB file and a file with labels), number of epochs and a destination path where trained model will be stored.  Parameter *-g* signals that a GPU is used for training. Parameter *-b* is for selecting batch size.
 
-    $ python3 trocr_train.py -m models/.trocr-base-stage1 -t /path/to/bentham_self-supervised/lines_40.lmdb -l /path/to/bentham_self-supervised/lines.trn -c /path/to/bentham_self-supervised/lines.val -e 5 -s models/test_stage1_5epochs -g -b 20
+    $ ./trocr_train.py -m models/.trocr-base-stage1 -t /path/to/bentham_self-supervised/lines_40.lmdb -l /path/to/bentham_self-supervised/lines.trn -c /path/to/bentham_self-supervised/lines.val -e 5 -s models/test_stage1_5epochs -g -b 20
 
   In case the training process is interrupted, it is possible to continue from a checkpoint. When training starts a configuration file is generated with all the training parameters. To resume training using this file specify its location:
 
-    $ python3 trocr_train.py --use-config --config-path /models/test_stage1_5epochs/config.json
+    $ ./trocr_train.py --use-config --config-path /models/test_stage1_5epochs/config.json
 
 ## Evaluation
 Script **trocr_eval_metrics.py** is used for generating transcripts of images and computing basic performance metrics.
 
-    $ python3 trocr_eval_metrics.py -m models/.trocr-base-stage1 -v /path/to/bentham_self-supervised/lines_40.lmdb -l /path/to/bentham_self-supervised/lines.val -s /save/path/for/results
+    $ ./trocr_eval_metrics.py -m models/.trocr-base-stage1 -v /path/to/bentham_self-supervised/lines_40.lmdb -l /path/to/bentham_self-supervised/lines.val -s /save/path/for/results
 
   Script **eval_metrics.py** is used to compute metrics on the results of the **trocr_eval_metrics.py**. It is used to compute confusion networks as a confidence metric. This script can also select the most confident samples and create a new label file with them. To prevent the selection of mostly the short labels, the script splits the samples into buckets according to the length of their labels.
 
@@ -47,7 +47,7 @@ Script **extract_ds.py** is used to extract images from the LMDB file.
 ### Data augmentation
 Script **data_augmentation.py** is used to generate augmented versions of images in the original dataset. Only the images in the label file will be augmented. It generates 8 augmentations variants of each image.
 
-    $ data_augmentation.py --database-path /Path/to/LMDB/database --label-file /Path/to/label_file --output-db-path /Path/to/output/LMDB/database --output-label-file /Path/to/output/label/file
+    $ ./data_augmentation.py --database-path /Path/to/LMDB/database --label-file /Path/to/label_file --output-db-path /Path/to/output/LMDB/database --output-label-file /Path/to/output/label/file
 
 ### LMDB tools
  **check_db.py** is used to check for  invalid images in the LMDB database
