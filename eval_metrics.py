@@ -85,7 +85,7 @@ class MetricsEvaluator:
         for prediction in predictions:
             cn = add_hypothese(cn, prediction, 1)
         confusion = np.prod(list(map(len, cn)))
-        return 1.0 / confusion
+        return 1.0 / confusion if confusion else 1.0
     
     def get_augmented_file_versions(self, file_name: str) -> list[str]:
         """
