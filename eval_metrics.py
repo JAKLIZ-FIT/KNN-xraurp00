@@ -13,10 +13,11 @@ class MetricsEvaluator:
     """
     Evaluates confidence metrics.
     """
-    def __init__(self, file: Path) -> None:
+    def __init__(self, file: Path, separator: str) -> None:
         """
         Initializes evaluator.
         :param file (pathlib.Path): path to file with dataset to evaluate.
+        :param separator (str): dataset field separator
         """
         self.augmentation_exts = [
             '_gaussian_square.jpg',
@@ -28,7 +29,7 @@ class MetricsEvaluator:
             '_mixup.jpg',
             '_cutmix.jpg'
         ]
-        self.dataset = self.load_stat_file(file=file)
+        self.dataset = self.load_stat_file(file=file, separator=separator)
     
     def check_augmentation(self, file_name: str) -> bool:
         """
@@ -43,15 +44,16 @@ class MetricsEvaluator:
                 return True
         return False
 
-    def load_stat_file(self, file: Path) -> dict:
+    def load_stat_file(self, file: Path, separator: str) -> dict:
         """
         Loads file with statistics and transcripted validation dataset.
         :param file (pathlib.Path): path to file
+        :param separator (str): dataset field separator
         :return (dict): dataset loaded as dictionary, indexed by file names
         """
         cer = load('cer')
         d = {}
-        df = pd.read_csv(file, index_col=0)
+        df = pd.read_csv(file, index_col=0, sep=separator)
         for i, r in df.iterrows():
             v = {}
             v['references'] = r.references if pd.notna(r.references) else ''
@@ -413,11 +415,16 @@ def parse_args():
         type=int,
         default=[100]
     )
+    parser.add_argument(
+        '--separator',
+        help='Dataset field separator. (default=\',\')',
+        default=','
+    )
     return parser.parse_args()
 
 def main():
     args = parse_args()
-    me = MetricsEvaluator(args.dataset)
+    me = MetricsEvaluator(args.dataset, separator=args.separator)
     me.compute_cn_conf()
     if not args.selected_metric:
         if not args.number_of_buckets:
