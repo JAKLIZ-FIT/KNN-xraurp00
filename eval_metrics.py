@@ -3,6 +3,7 @@
 from pathlib import Path
 import pandas as pd
 import numpy as np
+import random
 from evaluate import load
 from pero_ocr.decoding.confusion_networks import add_hypothese
 import json
@@ -303,6 +304,8 @@ class MetricsEvaluator:
                 for a in aug:
                     if a in self.dataset:
                         output.append(a)
+            
+            random.shuffle(output)
 
             # write output to file
             for key in output:
@@ -378,7 +381,7 @@ class MetricsEvaluator:
         :param output_file
         """
         with open(output_file, 'w') as output:
-            json.dump(self.dataset, output)
+            json.dump(self.dataset, output, indent=4)
 
 def parse_args():
     parser = argparse.ArgumentParser('Evaluates confidence metrics.')
