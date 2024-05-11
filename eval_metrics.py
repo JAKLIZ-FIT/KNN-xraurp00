@@ -370,6 +370,15 @@ class MetricsEvaluator:
         file.close()
 
         return results
+    
+    def save_intermediate_result(self, output_file: Path):
+        """
+        Saves loaded dataset in current state to json file, so it can be loaded
+        later to restore computation.
+        :param output_file
+        """
+        with open(output_file, 'w') as output:
+            json.dump(self.dataset, output)
 
 def parse_args():
     parser = argparse.ArgumentParser('Evaluates confidence metrics.')
@@ -420,12 +429,21 @@ def parse_args():
         help='Dataset field separator. (default=\',\')',
         default=','
     )
+    parser.add_argument(
+        '-i', '--save-intermediate-result',
+        help='Saves dataset to json file after confision networks are '
+             'computed.',
+        type=Path,
+        default=None
+    )
     return parser.parse_args()
 
 def main():
     args = parse_args()
     me = MetricsEvaluator(args.dataset, separator=args.separator)
     me.compute_cn_conf()
+    if args.save_intermediate_result:
+        me.save_intermediate_result(args.save_intermediate_result)
     if not args.selected_metric:
         if not args.number_of_buckets:
             metrics = me.save_metrics_to_file(
