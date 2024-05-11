@@ -77,8 +77,8 @@ def load_context(
     )
 
     # create dataloaders
-    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2) # TODO was 0
-    val_dl = DataLoader(val_ds, batch_size=batch_size, num_workers=2) # TODO was 0
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0) # TODO was 0
+    val_dl = DataLoader(val_ds, batch_size=batch_size, num_workers=0) # TODO was 0
 
     return Context(
         model=model,

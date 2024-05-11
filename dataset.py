@@ -15,8 +15,13 @@ def load_labels(path: Path) -> pd.DataFrame:
     label_df = None
     try:
         label_df = pd.read_csv(path, sep=" 0 ", header=None, engine='python',quotechar="\\")
-        if label_df.shape[1] == 1:
-            label_df["text"] = 'X'
+        # fix lines where label is empty
+        for i in label_df.index:
+            if label_df[0][i][-1] == '0':
+                label_df.at[i, 0] = label_df[0][i][:-2]
+                label_df.at[i, 1] = ''
+        #if label_df.shape[1] == 1:
+        #    label_df["text"] = 'X'
         label_df = label_df.rename(columns={0: "file_name", 1: "text"})
         label_df["text"] = label_df["text"].apply(lambda x: str(x).strip('\\'))
     except:
