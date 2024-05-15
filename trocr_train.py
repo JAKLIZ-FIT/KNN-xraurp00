@@ -469,7 +469,13 @@ def parse_args():
         help='Early stopping critterion threshold.',
         type=float,
         default=0.0001
-    ) # TODO find a good value
+    )
+    parser.add_argument(
+        '--learning-rate',
+        help='Learning rate to use. (default=1e-6)',
+        type=float,
+        default=1e-6
+    )
     return parser.parse_args()
 
 def main():

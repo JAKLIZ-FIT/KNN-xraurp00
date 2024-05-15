@@ -59,7 +59,7 @@ def load_config(args):
         pre_config['config_path'] = str(args.config_path)
         pre_config['start_epoch'] = 0
         pre_config['best_epoch'] = 0
-        pre_config['learning_rate'] = 1e-3# 5e-5 # TODO as argument?
+        pre_config['learning_rate'] = args.learning_rate
 
 
     # load last scores (also get last model checkpoint)
