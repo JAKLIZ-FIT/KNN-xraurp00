@@ -21,7 +21,7 @@ import datetime
 import pickle
 import pandas as pd
 
-COMPUTE_CER_WER = False
+COMPUTE_CER_WER = True
 SAVE_CHAR_PROBS = False
 CREATE_OUTPUT_DF = False # create a dataframe of all data at the end
 
